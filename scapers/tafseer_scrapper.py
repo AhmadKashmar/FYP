@@ -9,6 +9,7 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.edge.webdriver import WebDriver as EdgeDriver
+from selenium.webdriver.edge.options import Options
 
 
 def load_progress(progress_file: str, key: str) -> dict[str, int]:
@@ -68,8 +69,12 @@ def main():
     resume_aya_index = progress_state.get("aya_index", 0)
 
     # Change this to chrome if you want to use Chrome instead of Edge.
+    edge_options = Options()
+    edge_options.use_chromium = True
+    edge_options.add_argument("headless")
+    edge_options.add_argument("disable-gpu")
     edge_service = EdgeService("./msedgedriver.exe")
-    driver = EdgeDriver(service=edge_service)
+    driver = EdgeDriver(service=edge_service, options=edge_options)
     driver.get("https://www.altafsir.com/Tafasir.asp?LanguageID=1")
     time.sleep(2)  # wait for page to load
 
@@ -171,6 +176,13 @@ def main():
         return
     except Exception as e:
         print("\nAn error occurred:", str(e))
+        # save a screenshot + datetime
+        if not os.path.exists("screenshots"):
+            os.makedirs("screenshots")
+        screenshot = (
+            f"screenshots/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        )
+        driver.save_screenshot(screenshot)
         traceback.print_stack()
         remove_progress_entry(progress_file, progress_key)
         driver.quit()
@@ -184,7 +196,9 @@ def main():
 
 def save_df(rows, mv, tv):
     dt_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"tafseer_{dt_str}_mv{mv}_tv{tv}.csv"
+    if not os.path.exists("tafseer"):
+        os.makedirs("tafseer")
+    csv_filename = f"tafseer/{dt_str}_mv{mv}_tv{tv}.csv"
     df = pd.DataFrame(rows)
     df.to_csv(csv_filename, index=False, encoding="utf-8")
     print(f"Data saved to {csv_filename}")
