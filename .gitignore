@@ -1,4 +1,5 @@
 *.exe
 venv/
 *.csv
-*.json
+progress.json
+test.ipynb
