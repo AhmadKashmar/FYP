@@ -350,6 +350,7 @@ def main():
         raise
 
     save_df(all_tafsirs, mv, tv)
+    save_progress(progress_file, progress_key, soura_index, aya_index)
 
 
 if __name__ == "__main__":
