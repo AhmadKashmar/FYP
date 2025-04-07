@@ -166,7 +166,8 @@ def main():
         """
         cursor.execute(query, (row["ID"], row["text"], source))
         query = """
-        INSERT INTO relationship (sentence_id, section_id, related_text_id)"""
+        INSERT INTO relationship (sentence_id, section_id, related_text_id)
+        VALUES (%s, %s, %s)"""
         for i in range(int(size)):
             cursor.execute(query, (aya + i, soura, row["ID"]))
 
