@@ -145,6 +145,8 @@ def main():
     """
 
     for i, row in df.iterrows():
+        row["aya"] = int(row["aya"])
+        row["sura"] = int(row["sura"])
         cursor.execute(query, (row["aya"], row["sura"], None, row["text"]))
 
     dfs = []
@@ -159,6 +161,9 @@ def main():
     for i, row in df.iterrows():
         row["ID"] = row["tafsir_id"]
         mv, tv, soura, aya, size = row["tafsir_id"].split("_")
+        aya = int(aya)
+        size = int(size)
+        soura = int(soura)
         source = tv_mapping.get((mv, tv), None)
         query = """
         INSERT INTO Related_text (related_id, details, source)
