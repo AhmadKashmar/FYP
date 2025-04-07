@@ -3,3 +3,4 @@ venv/
 *.csv
 progress.json
 test.ipynb
+.env
