@@ -169,7 +169,7 @@ def main():
         INSERT INTO Related_text (related_id, details, source)
         VALUES (%s, %s, %s)
         """
-        cursor.execute(query, (row["ID"], row["text"], source))
+        cursor.execute(query, (row["ID"], row["text"].replace("<>", "\n"), source))
         query = """
         INSERT INTO relationship (sentence_id, section_id, related_text_id)
         VALUES (%s, %s, %s)"""
