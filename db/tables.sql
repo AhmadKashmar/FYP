@@ -1,7 +1,3 @@
-CREATE DATABASE IF NOT EXISTS FYP;
-
-USE FYP;
-
 CREATE TABLE
     IF NOT EXISTS Sentence (
         sentence_id INT NOT NULL,
