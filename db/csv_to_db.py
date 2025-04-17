@@ -150,9 +150,10 @@ def main():
         cursor.execute(query, (row["aya"], row["sura"], None, row["text"]))
 
     dfs = []
-    for dir in os.listdir("."):
+    for dir in os.listdir("data"):
         if not dir.startswith("tafseer"):
             continue
+        dir = os.path.join("data", dir)
         for file in os.listdir(dir):
             file = os.path.join(dir, file)
             dfs.append(pd.read_csv(file))

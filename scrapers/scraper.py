@@ -227,9 +227,9 @@ def save_progress(progress_file: str, key: str, soura_index: int, aya_index: int
 
 def save_df(rows: list[dict], mv: str, tv: str):
     dt_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    if not os.path.exists("tafseer"):
-        os.makedirs("tafseer")
-    csv_filename = f"tafseer/{dt_str}_mv{mv}_tv{tv}.csv"
+    if not os.path.exists("data/tafseer"):
+        os.makedirs("data/tafseer")
+    csv_filename = f"data/tafseer/{dt_str}_mv{mv}_tv{tv}.csv"
     df = pd.DataFrame(rows)
     df.to_csv(csv_filename, index=False, encoding="utf-8")
     print(f"Data saved to {csv_filename}")
