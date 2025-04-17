@@ -137,7 +137,7 @@ def main():
 
     cursor.execute(sql)
     connection.commit()
-    df = pd.read_csv("quran.csv")
+    df = pd.read_csv("data/quran.csv")
 
     query = """
     INSERT INTO Sentence (sentence_id, section_id, paragraph_id, text)
