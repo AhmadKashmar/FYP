@@ -158,22 +158,26 @@ def main():
             dfs.append(pd.read_csv(file))
 
     df = pd.concat(dfs, ignore_index=True)
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         row["ID"] = row["tafsir_id"]
         mv, tv, soura, aya, size = row["tafsir_id"].split("_")
         aya = int(aya)
         size = int(size)
         soura = int(soura)
         source = tv_mapping.get((mv, tv), None)
-        query = """
-        INSERT INTO Related_text (related_id, details, source)
-        VALUES (%s, %s, %s)
-        """
-        cursor.execute(query, (row["ID"], row["text"].replace("<>", "\n"), source))
-        query = """
-        INSERT INTO relationship (sentence_id, section_id, related_text_id)
-        VALUES (%s, %s, %s)"""
-        for i in range(int(size)):
-            cursor.execute(query, (aya + i, soura, row["ID"]))
+        for i, text in enumerate(row["text"].split("<>")):
+            if text == "":
+                continue
+            id = row["ID"] + f"_{i}"
+            query = """
+            INSERT INTO Related_text (related_id, details, source)
+            VALUES (%s, %s, %s)
+            """
+            cursor.execute(query, (id, text, source))
+            query = """
+            INSERT INTO relationship (sentence_id, section_id, related_text_id)
+            VALUES (%s, %s, %s)"""
+            for j in range(int(size)):
+                cursor.execute(query, (aya + j, soura, id))
 
     connection.commit()
