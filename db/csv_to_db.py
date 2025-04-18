@@ -166,8 +166,14 @@ def main():
         size = int(size)
         soura = int(soura)
         source = tv_mapping.get((mv, tv), None)
-        for i, text in enumerate(row["text"].split("<>")):
-            if text == "":
+        txt = ""
+        texts: list[str] = row["text"].split("<>")
+        for i, text in enumerate(texts):
+            if txt:
+                text = txt + " " + text
+                txt = ""
+            if len(text.split()) < 30 and i + 1 != len(texts):
+                txt = text
                 continue
             id = row["ID"] + f"_{i}"
             query = """
@@ -180,5 +186,4 @@ def main():
             VALUES (%s, %s, %s)"""
             for j in range(int(size)):
                 cursor.execute(query, (aya + j, soura, id))
-
     connection.commit()
