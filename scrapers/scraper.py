@@ -288,7 +288,7 @@ def clean(text: str) -> str:
 
 def main():
     mv, tv = parse_args()
-    progress_file = "progress.json"
+    progress_file = "data/progress.json"
     progress_key = f"{mv}_{tv}"
     progress_state = load_progress(progress_file, progress_key)
     resume_soura_index = progress_state.get("soura_index", 1)
@@ -346,7 +346,7 @@ def main():
         return
     except Exception as e:
         print("\nAn error occurred:", str(e))
-        traceback.print_stack()
+        traceback.print_exc()
         raise
 
     save_df(all_tafsirs, mv, tv)
