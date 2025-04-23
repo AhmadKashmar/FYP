@@ -18,10 +18,11 @@ def main():
     VECTOR_DIM = 768  # placeholder for now
 
     queries = [
-        f"ALTER TABLE Sentence ADD COLUMN IF NOT EXISTS embedding vector({VECTOR_DIM});",
-        f"ALTER TABLE Related_text ADD COLUMN IF NOT EXISTS embedding vector({VECTOR_DIM});",
+        "ALTER TABLE Sentence DROP COLUMN IF EXISTS embedding;",
+        f"ALTER TABLE Sentence ADD COLUMN embedding vector({VECTOR_DIM});",
+        "ALTER TABLE Related_text DROP COLUMN IF EXISTS embedding;",
+        f"ALTER TABLE Related_text ADD COLUMN embedding vector({VECTOR_DIM});",
     ]
-
     with conn.cursor() as cur:
         for query in queries:
             cur.execute(query)
