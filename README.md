@@ -19,28 +19,26 @@ DB_PORT=your_db_port
     docker-compose up -d postgres
     ```
 
-5. Build Python image (if you change dependencies):
+5. Load your CSV data into the database (you might want to edit the column names in db/csv_to_db.py to fit your data, or create a new script to migrate it):
 
     ```bash
-    docker-compose build app
+    python db/csv_to_db.py
     ```
 
-6. Load your CSV data into the database (you might want to edit the column names in db/csv_to_db.py to fit your data, or create a new script to migrate it):
+6. Change the VECTOR_DIM value in `db/alter_tables.py` to match your embedding model (currently set to 1024), then create that column.
 
     ```bash
-    docker-compose run --rm app python db/csv_to_db.py
+     python db/alter_tables.py
     ```
 
-7. Apply any schema tweaks:
+7. Compute and store embeddings (can be stopped with Ctrl+C, picks up where it left off):
 
     ```bash
-    docker-compose run --rm app python db/alter_tables.py
-    ```
-
-8. Compute and store embeddings (can be stopped with Ctrl+C, picks up where it left off):
-
-    ```bash
-    docker-compose run --rm app python db/update_tables.py
+    python db/update_tables.py
     ```
 
 At this point your data (and embeddings) are in the Postgres container.
+
+Notes:
+
+-   when you stop and start docker, make sure postgres is running (step 4).
