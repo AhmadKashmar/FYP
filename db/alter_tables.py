@@ -15,7 +15,7 @@ def main():
     )
     register_vector(conn)
 
-    VECTOR_DIM = 768  # placeholder for now
+    VECTOR_DIM = 1024  # placeholder for now
 
     queries = [
         "ALTER TABLE Sentence DROP COLUMN IF EXISTS embedding;",
