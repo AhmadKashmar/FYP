@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import psycopg2
 from dotenv import load_dotenv
-
+from tqdm import tqdm
 
 mv_mapping = {
     "1": "أمهات التفاسير",
@@ -149,41 +149,53 @@ def main():
         row["sura"] = int(row["sura"])
         cursor.execute(query, (row["aya"], row["sura"], None, row["text"]))
 
-    dfs = []
+    def process_df(df: pd.DataFrame, file: str):
+        for _, row in tqdm(df.iterrows()):
+            row["ID"] = row["tafsir_id"]
+            mv, tv, soura, aya, size = row["tafsir_id"].split("_")
+            aya = int(aya)
+            size = int(size)
+            soura = int(soura)
+            source = tv_mapping.get((mv, tv), None)
+            txt = ""
+            texts: list[str] = row["text"].split("<>")
+            for i, text in enumerate(texts):
+                if txt:
+                    text = txt + " " + text
+                    txt = ""
+                if len(text.split()) < 30 and i + 1 != len(texts):
+                    txt = text
+                    continue
+                id = row["ID"] + f"_{i}"
+                query = """
+                INSERT INTO Related_text (related_id, details, source)
+                VALUES (%s, %s, %s) ON CONFLICT (related_id) DO NOTHING
+                """
+                cursor.execute(query, (id, text, source))
+                query = """
+                INSERT INTO relationship (sentence_id, section_id, related_text_id)
+                VALUES (%s, %s, %s) ON CONFLICT (sentence_id, section_id, related_text_id)
+                DO NOTHING"""
+                try:
+                    for j in range(int(size)):
+                        cursor.execute(query, (aya + j, soura, id))
+                except Exception as e:
+                    print(row["tafsir_id"])
+                    raise e
+        print("File processed:", file)
+        os.path.exists("data/done") or os.mkdir("data/done")
+        os.rename(file, os.path.join("data/done", os.path.basename(file)))
+
     for dir in os.listdir("data"):
         if not dir.startswith("tafseer"):
             continue
         dir = os.path.join("data", dir)
         for file in os.listdir(dir):
             file = os.path.join(dir, file)
-            dfs.append(pd.read_csv(file))
+            process_df(pd.read_csv(file), file)
 
-    df = pd.concat(dfs, ignore_index=True)
-    for _, row in df.iterrows():
-        row["ID"] = row["tafsir_id"]
-        mv, tv, soura, aya, size = row["tafsir_id"].split("_")
-        aya = int(aya)
-        size = int(size)
-        soura = int(soura)
-        source = tv_mapping.get((mv, tv), None)
-        txt = ""
-        texts: list[str] = row["text"].split("<>")
-        for i, text in enumerate(texts):
-            if txt:
-                text = txt + " " + text
-                txt = ""
-            if len(text.split()) < 30 and i + 1 != len(texts):
-                txt = text
-                continue
-            id = row["ID"] + f"_{i}"
-            query = """
-            INSERT INTO Related_text (related_id, details, source)
-            VALUES (%s, %s, %s)
-            """
-            cursor.execute(query, (id, text, source))
-            query = """
-            INSERT INTO relationship (sentence_id, section_id, related_text_id)
-            VALUES (%s, %s, %s)"""
-            for j in range(int(size)):
-                cursor.execute(query, (aya + j, soura, id))
     connection.commit()
+
+
+if __name__ == "__main__":
+    main()
