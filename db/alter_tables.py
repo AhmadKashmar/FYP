@@ -13,6 +13,9 @@ def main():
         host=os.getenv("DB_HOST"),
         port=os.getenv("DB_PORT"),
     )
+    with conn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    conn.commit()
     register_vector(conn)
 
     VECTOR_DIM = 1024  # placeholder for now

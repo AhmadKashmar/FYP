@@ -5,3 +5,4 @@ venv/
 progress.json
 test.ipynb
 .env
+data/
