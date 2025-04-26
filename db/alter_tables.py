@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 
 
 def main():
+    if (
+        input(
+            "This will delete the embeddings from the database. Are you sure? (y/n): "
+        ).lower()
+        != "y"
+    ):
+        print("Not Confirmed...")
+        return
     load_dotenv()
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -13,6 +21,9 @@ def main():
         host=os.getenv("DB_HOST"),
         port=os.getenv("DB_PORT"),
     )
+    with conn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    conn.commit()
     register_vector(conn)
 
     VECTOR_DIM = 1024  # placeholder for now
