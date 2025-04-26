@@ -6,3 +6,4 @@ progress.json
 test.ipynb
 .env
 data/
+temp/
