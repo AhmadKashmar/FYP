@@ -8,6 +8,8 @@ import sentence_transformers
 import torch
 import numpy as np
 import warnings
+import traceback
+from random import randint
 
 load_dotenv()
 BATCH_SIZE = 128
@@ -34,7 +36,6 @@ class Transformer:
 
 class JinaAPIEmbedder:
     api_url = "https://api.jina.ai/v1/embeddings"
-    model_name: str
     idx = 0
     JINA_API_KEYS = os.getenv("JINA_API_KEY").split(",")
     headers = {
@@ -45,10 +46,8 @@ class JinaAPIEmbedder:
     @staticmethod
     def embeddings(texts: list[str]) -> list[list[float]]:
         try:
-            if not hasattr(JinaAPIEmbedder, "model_name"):
-                raise RuntimeError("Model not set; call Transformer.load() first")
             payload = {
-                "model": JinaAPIEmbedder.model_name,
+                "model": "jina-embeddings-v3",
                 "task": "retrieval.passage",
                 "input": texts,
             }
@@ -59,12 +58,13 @@ class JinaAPIEmbedder:
             )
             resp.raise_for_status()
             body = resp.json()
-        except:
+        except Exception as e:
             print(
                 f"API key {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]} is exhausted, switching..."
             )
             JinaAPIEmbedder.idx += 1
             if JinaAPIEmbedder.idx == len(JinaAPIEmbedder.JINA_API_KEYS):
+                print(e)
                 raise RuntimeError("All API keys exhausted")
             JinaAPIEmbedder.headers["Authorization"] = (
                 f"Bearer {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]}"
@@ -85,7 +85,7 @@ def fetch_pending(
         SELECT {pk_list}, {text_col}
           FROM {table}
          WHERE embedding IS NULL
-         ORDER BY {pk_list}
+         ORDER BY LENGTH({text_col})
          LIMIT {limit}
     """
     cursor.execute(query)
@@ -121,13 +121,35 @@ def process_table(
             pk_values = [tuple(row[: len(pk_cols)]) for row in batch]
             texts = [row[-1] for row in batch]
             try:
-                embeddings = Transformer.embeddings(texts)
+                embeddings = JinaAPIEmbedder.embeddings(texts)
             except RuntimeError as e:
                 print(f"Error fetching embeddings: {e}")
                 break
             update_batch(cur, table, pk_cols, embeddings, pk_values)
             connection.commit()
-            print(f"Updated {len(batch)} rows in `{table}`")
+            print(f"Updated {len(batch)} rows in `{table}`" + "." * randint(1, 20))
+
+
+def show_progress(conn: psycopg2.extensions.connection):
+    with conn.cursor() as cur:
+        print("Number of embedded rows: ")
+        query = """
+            SELECT COUNT(*)
+              FROM Related_text
+             WHERE embedding IS NOT NULL
+        """
+        cur.execute(query)
+        count = cur.fetchone()[0]
+        print(count)
+        print("Number of rows to be embedded: ")
+        query = """
+            SELECT COUNT(*)
+              FROM Related_text
+             WHERE embedding IS NULL
+        """
+        cur.execute(query)
+        count = cur.fetchone()[0]
+        print(count)
 
 
 def main():
@@ -140,15 +162,19 @@ def main():
         port=os.getenv("DB_PORT"),
     )
     register_vector(conn)
-
-    Transformer.load()
+    # show_progress(conn)
+    # Transformer.load()
 
     try:
         process_table(conn, "Sentence", ["sentence_id", "section_id"], "text")
         process_table(conn, "Related_text", ["related_id"], "details")
     except KeyboardInterrupt:
         print("Keyboard Interrupt. Exiting...")
+    except Exception as e:
+        traceback.print_exc()
+        print(f"Error: {e}")
     finally:
+        # show_progress(conn)
         conn.close()
 
 
