@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 
 
 def main():
+    if (
+        input(
+            "This will delete the embeddings from the database. Are you sure? (y/n): "
+        ).lower()
+        != "y"
+    ):
+        print("Not Confirmed...")
+        return
     load_dotenv()
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
