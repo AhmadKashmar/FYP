@@ -26,7 +26,7 @@ def main():
     conn.commit()
     register_vector(conn)
 
-    VECTOR_DIM = 1024  # placeholder for now
+    VECTOR_DIM = 1024
 
     queries = [
         "ALTER TABLE Sentence DROP COLUMN IF EXISTS embedding;",
