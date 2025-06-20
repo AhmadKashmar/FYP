@@ -1,8 +1,22 @@
-import pandas as pd
+import sys
 import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+import pandas as pd
 import psycopg2
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 from tqdm import tqdm
+from playground.utils import Wojood, TextCleaner
+import re
+
 
 mv_mapping = {
     "1": "أمهات التفاسير",
@@ -113,9 +127,158 @@ tv_mapping = {
     ("8", "112"): "الصراط المستقيم في تبيان القرآن الكريم / تفسير الكازروني (ت 923هـ)",
 }
 
+wojood = Wojood()
+cleaner = TextCleaner()
+
+SENTENCE_ENDING_PATTERN = (
+    r"""(?<![([{])(?:([.!؟!?…:؛]+)|<>)(?=\s+|\n+|$)(?![^()\[\]{}]*[)\]\}])"""
+)
+
+
+def to_sentences(text: str) -> list[str]:
+    """
+    Splits a piece of text to sentences
+    A sentence is defined as a sequence of characters that ends with a punctuation mark or colon (….?!:), followed by a white space or a new line.
+    A sentence might have a reference number at its end that also counts as part of the sentence.
+    Note that a sentence cannot end with an open bracket, so any punctuation enclosed by (), [], or {} is considered part of the sentence.
+    """
+    text = cleaner.cleanText(text)
+    min_sentence_tokens = 30
+    raw_sentences = re.sub(SENTENCE_ENDING_PATTERN, r"\1\n\n\n", text).split("\n\n\n")
+    raw_sentences = [s.strip() for s in raw_sentences if s.strip()]
+
+    final_sentences = []
+    buffer_sents = []
+    buffer_word_count = 0
+
+    for sent in raw_sentences:
+        wcount = len(
+            [
+                word
+                for word in sent.split()
+                if re.sub(r"[^\u0600-\u06FF]", "", word.lower()).strip()
+            ]
+        )
+        if buffer_word_count + wcount < min_sentence_tokens:
+            buffer_sents.append(sent)
+            buffer_word_count += wcount
+        else:
+            buffer_sents.append(sent)
+            buffer_word_count += wcount
+            final_sentences.append(" ".join(buffer_sents))
+            buffer_sents = []
+            buffer_word_count = 0
+
+    if buffer_sents:
+        if buffer_word_count < min_sentence_tokens and final_sentences:
+            final_sentences[-1] += " " + " ".join(buffer_sents)
+        else:
+            final_sentences.append(" ".join(buffer_sents))
+
+    return final_sentences
+
+
+def process_df(
+    df: pd.DataFrame,
+    file: str,
+    cursor: psycopg2.extensions.cursor,
+    page_size: int = 1000,
+):
+    # infer the mv, tv, soura, aya, and number of ayas this tafsir covers from the tafsir_id column
+    df["mv"], df["tv"], df["soura"], df["aya"], df["size"] = df["tafsir_id"].str.split(
+        "_", expand=True
+    )
+    # convert to integers
+    df[["soura", "aya", "size"]] = df[["soura", "aya", "size"]].astype(int)
+    # use the map defined above to get the source name
+    df["source"] = df[["mv", "tv"]].apply(lambda x: tv_mapping.get(tuple(x)), axis=1)
+    # divide the tafsir on the sentence level
+    df["sentences"] = df["text"].map(to_sentences)
+    # explode the sentences column to have one sentence per row
+    sentences = df.explode("sentences", ignore_index=True)
+    sentences["related_text_id"] = (
+        sentences["tafsir_id"]
+        + "_"
+        + sentences.groupby("tafsir_id").cumcount().astype(str)
+    )
+    sentences.rename(columns={"sentences": "details"}, inplace=True)
+
+    related_rows = sentences[["related_text_id", "details", "source"]].values.tolist()
+    relationship_rows = []
+    entity_rows_set = set()
+    ert_rows = []
+    for row in tqdm(sentences.itertuples()):
+        # iterate over the sentences and create the relationship rows
+        # extract the named entities from each sentence
+        aya: int = row.aya
+        soura: int = row.soura
+        related_text_id: str = row.related_text_id
+        size: int = row.size
+        details: str = row.details
+        relationship_rows.extend(
+            [(aya + j, soura, related_text_id) for j in range(size)]
+        )
+
+        for ent, typ in wojood.find_entities(details):
+            entity_rows_set.add((ent, typ))
+            ert_rows.append((ent, typ, related_text_id))
+
+    execute_values(
+        cursor,
+        """
+        INSERT INTO related_text (related_id, details, source)
+        VALUES %s
+        ON CONFLICT (related_id) DO NOTHING
+        """,
+        related_rows,
+        page_size=page_size,
+    )
+
+    execute_values(
+        cursor,
+        """
+        INSERT INTO relationship (sentence_id, section_id, related_text_id)
+        VALUES %s
+        ON CONFLICT (sentence_id, section_id, related_text_id) DO NOTHING
+        """,
+        relationship_rows,
+        page_size=page_size,
+    )
+
+    entity_rows = list(entity_rows_set)
+    id_rows = execute_values(
+        cursor,
+        """
+        INSERT INTO entity (entity_name, entity_type)
+        VALUES %s
+        ON CONFLICT (entity_name, entity_type) DO UPDATE
+            SET entity_name = EXCLUDED.entity_name
+        RETURNING entity_id, entity_name, entity_type
+        """,
+        entity_rows,
+        fetch=True,
+    )
+
+    ent_map = {(n, t): i for i, n, t in id_rows}
+    # get the entities and insert them into the table
+    ert_values = [(ent_map[(e, t)], rel_id, None) for e, t, rel_id in ert_rows]
+    execute_values(
+        cursor,
+        """
+        INSERT INTO entity_related_text (entity_id, related_text_id, relationship_type)
+        VALUES %s
+        ON CONFLICT DO NOTHING
+        """,
+        ert_values,
+        page_size=page_size,
+    )
+    cursor.connection.commit()
+    print("File processed:", file)
+    os.makedirs("data/done", exist_ok=True)
+    os.rename(file, os.path.join("data/done", os.path.basename(file)))
+
 
 def main():
-
     load_dotenv()
     db_name = os.getenv("DB_NAME")
     db_user = os.getenv("DB_USER")
@@ -142,59 +305,30 @@ def main():
     query = """
     INSERT INTO Sentence (sentence_id, section_id, paragraph_id, text)
     VALUES (%s, %s, %s, %s)
+    ON CONFLICT (sentence_id, section_id)
+    DO NOTHING;
     """
 
     for i, row in df.iterrows():
         row["aya"] = int(row["aya"])
         row["sura"] = int(row["sura"])
-        cursor.execute(query, (row["aya"], row["sura"], None, row["text"]))
-
-    def process_df(df: pd.DataFrame, file: str):
-        for _, row in tqdm(df.iterrows()):
-            row["ID"] = row["tafsir_id"]
-            mv, tv, soura, aya, size = row["tafsir_id"].split("_")
-            aya = int(aya)
-            size = int(size)
-            soura = int(soura)
-            source = tv_mapping.get((mv, tv), None)
-            txt = ""
-            texts: list[str] = row["text"].split("<>")
-            for i, text in enumerate(texts):
-                if txt:
-                    text = txt + " " + text
-                    txt = ""
-                if len(text.split()) < 30 and i + 1 != len(texts):
-                    txt = text
-                    continue
-                id = row["ID"] + f"_{i}"
-                query = """
-                INSERT INTO Related_text (related_id, details, source)
-                VALUES (%s, %s, %s) ON CONFLICT (related_id) DO NOTHING
-                """
-                cursor.execute(query, (id, text, source))
-                query = """
-                INSERT INTO relationship (sentence_id, section_id, related_text_id)
-                VALUES (%s, %s, %s) ON CONFLICT (sentence_id, section_id, related_text_id)
-                DO NOTHING"""
-                try:
-                    for j in range(int(size)):
-                        cursor.execute(query, (aya + j, soura, id))
-                except Exception as e:
-                    print(row["tafsir_id"])
-                    raise e
-        print("File processed:", file)
-        os.path.exists("data/done") or os.mkdir("data/done")
-        os.rename(file, os.path.join("data/done", os.path.basename(file)))
+        cursor.execute(
+            query,
+            (
+                row["aya"],
+                row["sura"],
+                None,
+                cleaner.cleanText(row["text"]),
+            ),
+        )
 
     for dir in os.listdir("data"):
         if not dir.startswith("tafseer"):
             continue
         dir = os.path.join("data", dir)
-        for file in os.listdir(dir):
+        for file in tqdm(os.listdir(dir)):
             file = os.path.join(dir, file)
-            process_df(pd.read_csv(file), file)
-
-    connection.commit()
+            process_df(pd.read_csv(file), file, cursor)
 
 
 if __name__ == "__main__":

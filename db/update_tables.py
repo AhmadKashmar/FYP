@@ -31,7 +31,11 @@ class Transformer:
 
     @staticmethod
     def embeddings(text: str) -> np.ndarray:
-        return Transformer.transformer.encode(text, task="retrieval.passage")
+        return Transformer.transformer.encode(
+            text,
+            task="retrieval.passage",
+            normalize_embeddings=True,
+        )
 
 
 class JinaAPIEmbedder:
@@ -168,6 +172,7 @@ def main():
     try:
         process_table(conn, "Sentence", ["sentence_id", "section_id"], "text")
         process_table(conn, "Related_text", ["related_id"], "details")
+        process_table(conn, "Entity", ["entity_id"], "entity_name")
     except KeyboardInterrupt:
         print("Keyboard Interrupt. Exiting...")
     except Exception as e:

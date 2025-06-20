@@ -33,6 +33,8 @@ def main():
         f"ALTER TABLE Sentence ADD COLUMN embedding vector({VECTOR_DIM});",
         "ALTER TABLE Related_text DROP COLUMN IF EXISTS embedding;",
         f"ALTER TABLE Related_text ADD COLUMN embedding vector({VECTOR_DIM});",
+        "ALTER TABLE Entity DROP COLUMN IF EXISTS embedding;",
+        f"ALTER TABLE Entity ADD COLUMN embedding vector({VECTOR_DIM});",
     ]
     with conn.cursor() as cur:
         for query in queries:

@@ -8,3 +8,5 @@ test.ipynb
 data/
 temp/
 wojood/
+logs/
+__pycache__/
