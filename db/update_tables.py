@@ -10,15 +10,19 @@ import numpy as np
 import warnings
 import traceback
 from random import randint
+from datetime import datetime
 
 load_dotenv()
-BATCH_SIZE = 128
+model_name = os.environ.get("EMBEDDING_MODEL")
+
+BATCH_SIZE = 2000
+
 
 class Transformer:
     transformer = None
 
     @staticmethod
-    def load(model_name: str = "jinaai/jina-embeddings-v3"):
+    def load(model_name: str = model_name):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Loading model {model_name} on {device}...")
         warnings.filterwarnings("ignore")
@@ -33,7 +37,7 @@ class Transformer:
     def embeddings(text: str) -> np.ndarray:
         return Transformer.transformer.encode(
             text,
-            task="retrieval.passage",
+            # task="retrieval.passage",
             normalize_embeddings=True,
         )
 
@@ -89,7 +93,6 @@ def fetch_pending(
         SELECT {pk_list}, {text_col}
           FROM {table}
          WHERE embedding IS NULL
-         ORDER BY LENGTH({text_col})
          LIMIT {limit}
     """
     cursor.execute(query)
@@ -125,18 +128,22 @@ def process_table(
             pk_values = [tuple(row[: len(pk_cols)]) for row in batch]
             texts = [row[-1] for row in batch]
             try:
-                embeddings = JinaAPIEmbedder.embeddings(texts)
+                embeddings = Transformer.embeddings(texts)
             except RuntimeError as e:
                 print(f"Error fetching embeddings: {e}")
                 break
             update_batch(cur, table, pk_cols, embeddings, pk_values)
             connection.commit()
-            print(f"Updated {len(batch)} rows in `{table}`" + "." * randint(1, 20))
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(
+                f"[{now}] Updated {len(batch)} rows in `{table}`" + "." * randint(1, 20)
+            )
 
 
 def show_progress(conn: psycopg2.extensions.connection):
     with conn.cursor() as cur:
         print("Number of embedded rows: ")
+        print("Related_text: ", end="")
         query = """
             SELECT COUNT(*)
               FROM Related_text
@@ -146,6 +153,7 @@ def show_progress(conn: psycopg2.extensions.connection):
         count = cur.fetchone()[0]
         print(count)
         print("Number of rows to be embedded: ")
+        print("Related_text: ", end="")
         query = """
             SELECT COUNT(*)
               FROM Related_text
@@ -167,19 +175,18 @@ def main():
     )
     register_vector(conn)
     # show_progress(conn)
-    # Transformer.load()
+    Transformer.load(model_name)
 
     try:
         process_table(conn, "Sentence", ["sentence_id", "section_id"], "text")
         process_table(conn, "Related_text", ["related_id"], "details")
-        process_table(conn, "Entity", ["entity_id"], "entity_name")
     except KeyboardInterrupt:
         print("Keyboard Interrupt. Exiting...")
     except Exception as e:
         traceback.print_exc()
         print(f"Error: {e}")
     finally:
-        # show_progress(conn)
+        show_progress(conn)
         conn.close()
 
 

@@ -14,168 +14,713 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 from tqdm import tqdm
-from playground.utils import Wojood, TextCleaner
+from playground.utils import TextCleaner
 import re
 
 
-mv_mapping = {
-    "1": "أمهات التفاسير",
-    "2": "تفاسير أهل السنة",
-    "3": "تفاسير أهل السنة الصوفية",
-    "9": "تفاسير ميسرة",
-    "4": "تفاسير الشيعة الإثنى عشرية",
-    "5": "تفاسيرالزيدية",
-    "6": "تفاسيرالاباضية",
-    "7": "تفاسير حديثة",
-    "8": "تفاسير مختصرة",
-}
-
 tv_mapping = {
-    ("1", "1"): "جامع البيان في تفسير القرآن/ الطبري (ت 310 هـ)",
-    ("1", "2"): "الكشاف/ الزمخشري (ت 538 هـ)",
-    ("1", "4"): "مفاتيح الغيب ، التفسير الكبير/ الرازي (ت 606 هـ)",
-    ("1", "5"): "الجامع لاحكام القرآن/ القرطبي (ت 671 هـ)",
-    ("1", "7"): "تفسير القرآن العظيم/ ابن كثير (ت 774 هـ)",
-    ("1", "6"): "انوار التنزيل واسرار التأويل/ البيضاوي (ت 685 هـ)",
-    ("1", "8"): "تفسير الجلالين/ المحلي و السيوطي (ت المحلي 864 هـ)",
-    ("1", "9"): "فتح القدير/ الشوكاني (ت 1250 هـ)",
-    ("2", "10"): "تفسير القرآن/ الفيروز آبادي (ت817 هـ)",
-    ("2", "11"): "بحر العلوم/ السمرقندي (ت 375 هـ)",
-    ("2", "12"): "النكت والعيون/ الماوردي (ت 450 هـ)",
-    ("2", "13"): "معالم التنزيل/ البغوي (ت 516 هـ)",
-    ("2", "14"): "المحرر الوجيز في تفسير الكتاب العزيز/ ابن عطية (ت 546 هـ)",
-    ("2", "15"): "زاد المسير في علم التفسير/ ابن الجوزي (ت 597 هـ)",
-    ("2", "16"): "تفسير القرآن/ ابن عبد السلام (ت 660 هـ)",
-    ("2", "17"): "مدارك التنزيل وحقائق التأويل/ النسفي (ت 710 هـ)",
-    ("2", "18"): "لباب التأويل في معاني التنزيل/ الخازن (ت 725 هـ)",
-    ("2", "19"): "البحر المحيط/ ابو حيان (ت 754 هـ)",
-    ("2", "20"): "التفسير/ ابن عرفة (ت 803 هـ)",
-    ("2", "22"): "غرائب القرآن و رغائب الفرقان/القمي النيسابوري (ت 728 هـ)",
-    ("2", "23"): "الجواهر الحسان في تفسير القرآن/ الثعالبي (ت 875 هـ)",
-    ("2", "24"): "اللباب في علوم الكتاب/ ابن عادل (ت 880 هـ)",
-    ("2", "25"): "نظم الدرر في تناسب الآيات والسور/ البقاعي (ت 885 هـ)",
-    ("2", "26"): "الدر المنثور في التفسير بالمأثور/ السيوطي (ت 911 هـ)",
-    ("2", "28"): "إرشاد العقل السليم إلى مزايا الكتاب الكريم/ ابو السعود (ت 951 هـ)",
-    ("2", "67"): "مقاتل بن سليمان/ مقاتل بن سليمان (ت 150 هـ)",
-    ("2", "75"): "الكشف والبيان / الثعلبي (ت 427 هـ)",
-    ("2", "78"): "تفسير مجاهد / مجاهد بن جبر المخزومي (ت 104 هـ)",
-    ("2", "79"): "الدر المصون/السمين الحلبي (ت 756 هـ)",
-    ("2", "88"): "التسهيل لعلوم التنزيل / ابن جزي الغرناطي (ت 741 هـ)",
-    ("2", "91"): "التفسير الكبير / للإمام الطبراني (ت 360 هـ)",
-    ("2", "94"): "تأويلات أهل السنة/ الماتريدي (ت 333هـ)",
-    ("2", "96"): "حاشية الصاوي / تفسير الجلالين (ت1241هـ)",
-    (
-        "2",
-        "99",
-    ): "تفسير سفيان الثوري/ عبد الله سفيان بن سعيد بن مسروق الثوري الكوفي (ت161هـ)",
-    ("2", "100"): "تفسير النسائي/ النسائي (ت 303 هـ)",
-    ("2", "101"): "تفسير عبد الرزاق الصنعاني مصور /همام الصنعاني (ت 211 هـ)",
-    ("2", "102"): "محاسن التأويل / محمد جمال الدين القاسمي (ت 1332هـ)",
-    ("2", "103"): "تفسير المنار / محمد رشيد بن علي رضا (ت 1354هـ)",
-    ("2", "104"): "تفسير القرآن العزيز/ ابن أبي زمنين (ت  399هـ)",
-    ("2", "105"): "كتاب نزهة القلوب/ أبى بكر السجستاني (ت 330هـ)",
-    (
-        "2",
-        "111",
-    ): "رموز الكنوز في تفسير الكتاب العزيز/ عز الدين عبد الرازق الرسعني الحنبلي (ت 661هـ)",
-    ("3", "29"): "تفسير القرآن/ التستري (ت 283 هـ)",
-    ("3", "30"): "حقائق التفسير/ السلمي (ت 412 هـ)",
-    ("3", "31"): "لطائف الإشارات / القشيري (ت 465 هـ)",
-    ("3", "32"): "عرائس البيان في حقائق القرآن/ البقلي (ت 606 هـ)",
-    ("3", "33"): "تفسير القرآن / ابن عربي (ت 638 هـ)",
-    ("3", "36"): "روح البيان في تفسير القرآن/ اسماعيل حقي (ت 1127 هـ)",
-    ("3", "37"): "البحر المديد في تفسير القرآن المجيد/ ابن عجيبة (ت 1224 هـ)",
-    ("3", "92"): "تفسير الهدايه إلى بلوغ النهايه/ مكي بن أبي طالب (ت 437 هـ)",
-    ("3", "95"): "تفسير الجيلاني/ الجيلاني (ت713هـ)",
-    (
-        "3",
-        "97",
-    ): "التأويلات النجمية في التفسير الإشاري الصوفي/ الإمام أحمد بن عمر (ت618 هـ)",
-    ("9", "50"): "تيسير التفسير/ اطفيش (ت 1332 هـ)",
-    ("9", "68"): "تيسير التفسير/ القطان (ت 1404 هـ)",
-    ("9", "65"): "المنتخب في تفسير القرآن الكريم / لجنة القرآن و السنة ",
-    ("9", "71"): "أيسر التفاسير/ د. أسعد حومد (ت 2011م)",
-    ("9", "85"): "تفسير آيات الأحكام/ الصابوني (مـ 1930م -)",
-    ("9", "84"): "مختصر تفسير ابن كثير/ الصابوني (مـ 1930م -)",
-    ("9", "83"): "صفوة التفاسير/ الصابوني (مـ 1930م -)",
-    ("4", "3"): "مجمع البيان في تفسير القرآن/ الطبرسي (ت 548 هـ)",
-    ("4", "38"): "تفسير القرآن/ علي بن ابراهيم القمي (ت القرن 4 هـ)",
-    ("4", "39"): "التبيان الجامع لعلوم القرآن/ الطوسي (ت 460 هـ)",
-    ("4", "56"): "الميزان في تفسير القرآن/ الطبطبائي (ت 1401 هـ)",
-    ("4", "41"): "الصافي في تفسير كلام الله الوافي/ الفيض الكاشاني (ت 1090 هـ)",
-    ("4", "42"): "تفسير بيان السعادة في مقامات العبادة/ الجنابذي (ت القرن 14  هـ)",
-    ("4", "40"): "تفسير صدر المتألهين/ صدر المتألهين الشيرازي (ت 1059 هـ)",
-    ("4", "110"): "البرهان في تفسير القرآن/ هاشم الحسيني البحراني (ت 1107هـ)",
-    ("5", "44"): "تفسير الحبري/ الحبري (ت 286 هـ)",
-    ("5", "45"): "تفسير فرات الكوفي/ فرات الكوفي (ت القرن 3 هـ)",
-    ("5", "47"): "تفسير الأعقم/ الأعقم (ت القرن 9 هـ)",
-    ("5", "89"): "غريب القرآن / زيد بن علي (ت 120 هـ)",
-    ("6", "48"): "تفسير كتاب الله العزيز/ الهواري (ت القرن 3 هـ)",
-    ("6", "49"): "هميان الزاد إلى دار المعاد / اطفيش (ت 1332 هـ)",
-    ("6", "51"): "جواهر التفسير/ الخليلي (مـ 1942م- )",
-    ("7", "52"): "روح المعاني/ الالوسي (ت 1270 هـ)",
-    ("7", "54"): "التحرير والتنوير/ ابن عاشور (ت 1393 هـ)",
-    ("7", "55"): "أضواء البيان في تفسير القرآن/ الشنقيطي (ت 1393 هـ)",
-    ("7", "76"): "خواطر محمد متولي الشعراوي (ت 1419 هـ)",
-    ("7", "57"): "الوسيط في تفسير القرآن الكريم/ طنطاوي (ت 1431 هـ)",
-    ("8", "60"): "الوجيز/ الواحدي (ت 468 هـ)",
-    ("8", "90"): "النهر الماد / الأندلسي (ت 754 هـ)",
-    (
-        "8",
-        "106",
-    ): "تذكرة الاريب في تفسير الغريب/ الامام ابي الفرج ابن الجوزي (ت 597 هـ)",
-    ("8", "112"): "الصراط المستقيم في تبيان القرآن الكريم / تفسير الكازروني (ت 923هـ)",
+    "1_1": {
+        "title": "جامع البيان في تفسير القرآن",
+        "author": "الطبري",
+        "date_info": "ت 310 هـ",
+        "concept": "بالمأثور",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_2": {
+        "title": "الكشاف",
+        "author": "الزمخشري",
+        "date_info": "ت 538 هـ",
+        "concept": "بياني",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_4": {
+        "title": "مفاتيح الغيب ، التفسير الكبير",
+        "author": "الرازي",
+        "date_info": "ت 606 هـ",
+        "concept": "اجتهادي",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_5": {
+        "title": "الجامع لاحكام القرآن",
+        "author": "القرطبي",
+        "date_info": "ت 671 هـ",
+        "concept": "فقهي",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_7": {
+        "title": "تفسير القرآن العظيم",
+        "author": "ابن كثير",
+        "date_info": "ت 774 هـ",
+        "concept": "بالمأثور",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_6": {
+        "title": "انوار التنزيل واسرار التأويل",
+        "author": "البيضاوي",
+        "date_info": "ت 685 هـ",
+        "concept": "اجتهادي",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_8": {
+        "title": "تفسير الجلالين",
+        "author": "المحلي و السيوطي",
+        "date_info": "ت المحلي 864 هـ",
+        "concept": "ميسر",
+        "source_type": "أمهات التفاسير",
+    },
+    "1_9": {
+        "title": "فتح القدير",
+        "author": "الشوكاني",
+        "date_info": "ت 1250 هـ",
+        "concept": "اجتهادي",
+        "source_type": "أمهات التفاسير",
+    },
+    "2_10": {
+        "title": "تفسير القرآن",
+        "author": "الفيروز آبادي",
+        "date_info": "ت817 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_11": {
+        "title": "بحر العلوم",
+        "author": "السمرقندي",
+        "date_info": "ت 375 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_12": {
+        "title": "النكت والعيون",
+        "author": "الماوردي",
+        "date_info": "ت 450 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_13": {
+        "title": "معالم التنزيل",
+        "author": "البغوي",
+        "date_info": "ت 516 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_14": {
+        "title": "المحرر الوجيز في تفسير الكتاب العزيز",
+        "author": "ابن عطية",
+        "date_info": "ت 546 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_15": {
+        "title": "زاد المسير في علم التفسير",
+        "author": "ابن الجوزي",
+        "date_info": "ت 597 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_16": {
+        "title": "تفسير القرآن",
+        "author": "ابن عبد السلام",
+        "date_info": "ت 660 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_17": {
+        "title": "مدارك التنزيل وحقائق التأويل",
+        "author": "النسفي",
+        "date_info": "ت 710 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_18": {
+        "title": "لباب التأويل في معاني التنزيل",
+        "author": "الخازن",
+        "date_info": "ت 725 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_19": {
+        "title": "البحر المحيط",
+        "author": "ابو حيان",
+        "date_info": "ت 754 هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_20": {
+        "title": "التفسير",
+        "author": "ابن عرفة",
+        "date_info": "ت 803 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_22": {
+        "title": "غرائب القرآن و رغائب الفرقان",
+        "author": "القمي النيسابوري",
+        "date_info": "ت 728 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_23": {
+        "title": "الجواهر الحسان في تفسير القرآن",
+        "author": "الثعالبي",
+        "date_info": "ت 875 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_24": {
+        "title": "اللباب في علوم الكتاب",
+        "author": "ابن عادل",
+        "date_info": "ت 880 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_25": {
+        "title": "نظم الدرر في تناسب الآيات والسور",
+        "author": "البقاعي",
+        "date_info": "ت 885 هـ",
+        "concept": "بياني",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_26": {
+        "title": "الدر المنثور في التفسير بالمأثور",
+        "author": "السيوطي",
+        "date_info": "ت 911 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_28": {
+        "title": "إرشاد العقل السليم إلى مزايا الكتاب الكريم",
+        "author": "ابو السعود",
+        "date_info": "ت 951 هـ",
+        "concept": "بياني",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_67": {
+        "title": "مقاتل بن سليمان",
+        "author": "مقاتل بن سليمان",
+        "date_info": "ت 150 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_75": {
+        "title": "الكشف والبيان",
+        "author": "الثعلبي",
+        "date_info": "ت 427 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_78": {
+        "title": "تفسير مجاهد",
+        "author": "مجاهد بن جبر المخزومي",
+        "date_info": "ت 104 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_79": {
+        "title": "الدر المصون",
+        "author": "السمين الحلبي",
+        "date_info": "ت 756 هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_88": {
+        "title": "التسهيل لعلوم التنزيل",
+        "author": "ابن جزي الغرناطي",
+        "date_info": "ت 741 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_91": {
+        "title": "التفسير الكبير",
+        "author": "الإمام الطبراني",
+        "date_info": "ت 360 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_94": {
+        "title": "تأويلات أهل السنة",
+        "author": "الماتريدي",
+        "date_info": "ت 333هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_96": {
+        "title": "حاشية الصاوي",
+        "author": "تفسير الجلالين",
+        "date_info": "ت1241هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_99": {
+        "title": "تفسير سفيان الثوري",
+        "author": "عبد الله سفيان بن سعيد بن مسروق الثوري الكوفي",
+        "date_info": "ت161هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_100": {
+        "title": "تفسير النسائي",
+        "author": "النسائي",
+        "date_info": "ت 303 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_101": {
+        "title": "تفسير عبد الرزاق الصنعاني مصور",
+        "author": "همام الصنعاني",
+        "date_info": "ت 211 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_102": {
+        "title": "محاسن التأويل",
+        "author": "محمد جمال الدين القاسمي",
+        "date_info": "ت 1332هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_103": {
+        "title": "تفسير المنار",
+        "author": "محمد رشيد بن علي رضا",
+        "date_info": "ت 1354هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_104": {
+        "title": "تفسير القرآن العزيز",
+        "author": "ابن أبي زمنين",
+        "date_info": "ت  399هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_105": {
+        "title": "كتاب نزهة القلوب",
+        "author": "أبى بكر السجستاني",
+        "date_info": "ت 330هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "2_111": {
+        "title": "رموز الكنوز في تفسير الكتاب العزيز",
+        "author": "عز الدين عبد الرازق الرسعني الحنبلي",
+        "date_info": "ت 661هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة",
+    },
+    "3_29": {
+        "title": "تفسير القرآن",
+        "author": "التستري",
+        "date_info": "ت 283 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_30": {
+        "title": "حقائق التفسير",
+        "author": "السلمي",
+        "date_info": "ت 412 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_31": {
+        "title": "لطائف الإشارات",
+        "author": "القشيري",
+        "date_info": "ت 465 هـ",
+        "concept": "إشاري",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_32": {
+        "title": "عرائس البيان في حقائق القرآن",
+        "author": "البقلي",
+        "date_info": "ت 606 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_33": {
+        "title": "تفسير القرآن",
+        "author": "ابن عربي",
+        "date_info": "ت 638 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_36": {
+        "title": "روح البيان في تفسير القرآن",
+        "author": "اسماعيل حقي",
+        "date_info": "ت 1127 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_37": {
+        "title": "البحر المديد في تفسير القرآن المجيد",
+        "author": "ابن عجيبة",
+        "date_info": "ت 1224 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_92": {
+        "title": "تفسير الهدايه إلى بلوغ النهايه",
+        "author": "مكي بن أبي طالب",
+        "date_info": "ت 437 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_95": {
+        "title": "تفسير الجيلاني",
+        "author": "الجيلاني",
+        "date_info": "ت713هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "3_97": {
+        "title": "التأويلات النجمية في التفسير الإشاري الصوفي",
+        "author": "الإمام أحمد بن عمر",
+        "date_info": "ت618 هـ",
+        "concept": "إشاري",
+        "source_type": "تفاسير أهل السنة الصوفية",
+    },
+    "9_50": {
+        "title": "تيسير التفسير",
+        "author": "اطفيش",
+        "date_info": "ت 1332 هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_68": {
+        "title": "تيسير التفسير",
+        "author": "القطان",
+        "date_info": "ت 1404 هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_65": {
+        "title": "المنتخب في تفسير القرآن الكريم",
+        "author": "لجنة القرآن و السنة",
+        "date_info": None,
+        "concept": "ميسر",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_71": {
+        "title": "أيسر التفاسير",
+        "author": "د. أسعد حومد",
+        "date_info": "ت 2011م",
+        "concept": "ميسر",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_85": {
+        "title": "تفسير آيات الأحكام",
+        "author": "الصابوني",
+        "date_info": "مـ 1930م -",
+        "concept": "فقهي",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_84": {
+        "title": "مختصر تفسير ابن كثير",
+        "author": "الصابوني",
+        "date_info": "مـ 1930م -",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير ميسرة",
+    },
+    "9_83": {
+        "title": "صفوة التفاسير",
+        "author": "الصابوني",
+        "date_info": "مـ 1930م -",
+        "concept": "ميسر",
+        "source_type": "تفاسير ميسرة",
+    },
+    "4_3": {
+        "title": "مجمع البيان في تفسير القرآن",
+        "author": "الطبرسي",
+        "date_info": "ت 548 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_38": {
+        "title": "تفسير القرآن",
+        "author": "علي بن ابراهيم القمي",
+        "date_info": "ت القرن 4 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_39": {
+        "title": "التبيان الجامع لعلوم القرآن",
+        "author": "الطوسي",
+        "date_info": "ت 460 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_56": {
+        "title": "الميزان في تفسير القرآن",
+        "author": "الطبطبائي",
+        "date_info": "ت 1401 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_41": {
+        "title": "الصافي في تفسير كلام الله الوافي",
+        "author": "الفيض الكاشاني",
+        "date_info": "ت 1090 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_42": {
+        "title": "تفسير بيان السعادة في مقامات العبادة",
+        "author": "الجنابذي",
+        "date_info": "ت القرن 14  هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_40": {
+        "title": "تفسير صدر المتألهين",
+        "author": "صدر المتألهين الشيرازي",
+        "date_info": "ت 1059 هـ",
+        "concept": "صوفي",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "4_110": {
+        "title": "البرهان في تفسير القرآن",
+        "author": "هاشم الحسيني البحراني",
+        "date_info": "ت 1107هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسير الشيعة الإثنى عشرية",
+    },
+    "5_44": {
+        "title": "تفسير الحبري",
+        "author": "الحبري",
+        "date_info": "ت 286 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسيرالزيدية",
+    },
+    "5_45": {
+        "title": "تفسير فرات الكوفي",
+        "author": "فرات الكوفي",
+        "date_info": "ت القرن 3 هـ",
+        "concept": "بالمأثور",
+        "source_type": "تفاسيرالزيدية",
+    },
+    "5_47": {
+        "title": "تفسير الأعقم",
+        "author": "الأعقم",
+        "date_info": "ت القرن 9 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسيرالزيدية",
+    },
+    "5_89": {
+        "title": "غريب القرآن",
+        "author": "زيد بن علي",
+        "date_info": "ت 120 هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسيرالزيدية",
+    },
+    "6_48": {
+        "title": "تفسير كتاب الله العزيز",
+        "author": "الهواري",
+        "date_info": "ت القرن 3 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسيرالاباضية",
+    },
+    "6_49": {
+        "title": "هميان الزاد إلى دار المعاد",
+        "author": "اطفيش",
+        "date_info": "ت 1332 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسيرالاباضية",
+    },
+    "6_51": {
+        "title": "جواهر التفسير",
+        "author": "الخليلي",
+        "date_info": "مـ 1942م- ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسيرالاباضية",
+    },
+    "7_52": {
+        "title": "روح المعاني",
+        "author": "الالوسي",
+        "date_info": "ت 1270 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير حديثة",
+    },
+    "7_54": {
+        "title": "التحرير والتنوير",
+        "author": "ابن عاشور",
+        "date_info": "ت 1393 هـ",
+        "concept": "بياني",
+        "source_type": "تفاسير حديثة",
+    },
+    "7_55": {
+        "title": "أضواء البيان في تفسير القرآن",
+        "author": "الشنقيطي",
+        "date_info": "ت 1393 هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير حديثة",
+    },
+    "7_76": {
+        "title": "خواطر محمد متولي الشعراوي",
+        "author": "محمد متولي الشعراوي",
+        "date_info": "ت 1419 هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير حديثة",
+    },
+    "7_57": {
+        "title": "الوسيط في تفسير القرآن الكريم",
+        "author": "طنطاوي",
+        "date_info": "ت 1431 هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير حديثة",
+    },
+    "8_60": {
+        "title": "الوجيز",
+        "author": "الواحدي",
+        "date_info": "ت 468 هـ",
+        "concept": "ميسر",
+        "source_type": "تفاسير مختصرة",
+    },
+    "8_90": {
+        "title": "النهر الماد",
+        "author": "الأندلسي",
+        "date_info": "ت 754 هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسير مختصرة",
+    },
+    "8_106": {
+        "title": "تذكرة الاريب في تفسير الغريب",
+        "author": "الامام ابي الفرج ابن الجوزي",
+        "date_info": "ت 597 هـ",
+        "concept": "لغوي",
+        "source_type": "تفاسير مختصرة",
+    },
+    "8_112": {
+        "title": "الصراط المستقيم في تبيان القرآن الكريم",
+        "author": "تفسير الكازروني",
+        "date_info": "ت 923هـ",
+        "concept": "اجتهادي",
+        "source_type": "تفاسير مختصرة",
+    },
 }
 
-wojood = Wojood()
 cleaner = TextCleaner()
 
-SENTENCE_ENDING_PATTERN = (
-    r"""(?<![([{])(?:([.!؟!?…:؛]+)|<>)(?=\s+|\n+|$)(?![^()\[\]{}]*[)\]\}])"""
+SENTENCE_BREAK = re.compile(
+    r"""(?<=[.!؟!?…:؛])(?![^()\[\]{}]*[)\]\}])\s+""", re.VERBOSE
 )
+
+
+def enforce_lower_bound(texts: list[str], min_token_cnt: int):
+    """
+    Makes sure the minimum number of tokens per list item is >= min_token_cnt
+    """
+    clean_texts: list[str] = []
+    for text in texts:
+        if not clean_texts:
+            clean_texts.append(text)
+            continue
+        word_count = len(clean_texts[-1].split())
+        if word_count < min_token_cnt:
+            clean_texts[-1] += " " + text
+        else:
+            clean_texts.append(text)
+    if len(clean_texts) > 1 and len(clean_texts[-1].split()) < min_token_cnt:
+        last = clean_texts.pop()
+        clean_texts[-1] += " " + last
+    return clean_texts
+
+
+def enforce_upper_bound(texts: list[str], max_token_cnt: int):
+    i = 0
+    clean_texts: list[str] = []
+    while i < len(texts):
+        text = texts[i]
+        length = len(text.split())
+        if length < 2 * max_token_cnt:
+            clean_texts.append(text)
+        else:
+            for j in range(0, length, max_token_cnt):
+                clean_texts.append(" ".join(text.split()[j : j + max_token_cnt]))
+        i += 1
+    return clean_texts
 
 
 def to_sentences(text: str) -> list[str]:
     """
-    Splits a piece of text to sentences
-    A sentence is defined as a sequence of characters that ends with a punctuation mark or colon (….?!:), followed by a white space or a new line.
-    A sentence might have a reference number at its end that also counts as part of the sentence.
-    Note that a sentence cannot end with an open bracket, so any punctuation enclosed by (), [], or {} is considered part of the sentence.
+    Splits a piece of text to sentences with min/max token count. min token count is given more priority over max token count
+    Generally, the real max token count is min + max - 1
     """
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\{\s*(?:<>\s*)?", "{", text)
+    text = re.sub(r"(?:(?:\s*<>\s*)|\s+)\}", "}", text)
+    text = re.sub(r"\(\s*(?:<>\s*)?", "(", text)
+    text = re.sub(r"(?:(?:\s*<>\s*)|\s+)\)", ")", text)
+    text = re.sub(r"\[\s*(?:<>\s*)?", "[", text)
+    text = re.sub(r"(?:(?:\s*<>\s*)|\s+)\]", "]", text)
+    text = re.sub(r"\s+\.", ".", text)
     text = cleaner.cleanText(text)
+
+    min_paragraph_tokens = 150
     min_sentence_tokens = 30
-    raw_sentences = re.sub(SENTENCE_ENDING_PATTERN, r"\1\n\n\n", text).split("\n\n\n")
-    raw_sentences = [s.strip() for s in raw_sentences if s.strip()]
+    max_sentence_tokens = 40
 
-    final_sentences = []
-    buffer_sents = []
-    buffer_word_count = 0
+    paragraphs = text.split("<>")
+    paragraphs = enforce_lower_bound(paragraphs, min_paragraph_tokens)
 
-    for sent in raw_sentences:
-        wcount = len(
-            [
-                word
-                for word in sent.split()
-                if re.sub(r"[^\u0600-\u06FF]", "", word.lower()).strip()
-            ]
+    result: list[str] = []
+    for paragraph in paragraphs:
+        sentences = SENTENCE_BREAK.split(paragraph)
+        sentences = enforce_lower_bound(sentences, min_sentence_tokens)
+        sentences = enforce_upper_bound(sentences, max_sentence_tokens)
+        result.extend([s for s in sentences if s])
+
+    result = enforce_lower_bound(result, min_sentence_tokens)
+
+    return [s for s in result if s]
+
+
+def create_tables(cursor: psycopg2.extensions.cursor):
+    # execute SQL in db/tables.sql to create the database and tables if not created
+    with open("db/tables.sql", "r") as f:
+        sql = f.read()
+    cursor.execute(sql)
+
+
+def add_sentences(cursor: psycopg2.extensions.cursor):
+    df = pd.read_csv("data/quran.csv")
+    query = """
+    INSERT INTO Sentence (sentence_id, section_id, paragraph_id, text)
+    VALUES %s
+    ON CONFLICT (sentence_id, section_id)
+    DO NOTHING;
+    """
+    values: list[tuple[int, int, int, str]] = []
+    for i, row in df.iterrows():
+        row["aya"] = int(row["aya"])
+        row["sura"] = int(row["sura"])
+        values.append(
+            (
+                row["aya"],
+                row["sura"],
+                None,
+                cleaner.cleanText(row["text"]),
+            )
         )
-        if buffer_word_count + wcount < min_sentence_tokens:
-            buffer_sents.append(sent)
-            buffer_word_count += wcount
-        else:
-            buffer_sents.append(sent)
-            buffer_word_count += wcount
-            final_sentences.append(" ".join(buffer_sents))
-            buffer_sents = []
-            buffer_word_count = 0
+    execute_values(cursor, query, values)
 
-    if buffer_sents:
-        if buffer_word_count < min_sentence_tokens and final_sentences:
-            final_sentences[-1] += " " + " ".join(buffer_sents)
-        else:
-            final_sentences.append(" ".join(buffer_sents))
 
-    return final_sentences
+def add_sources(cursor: psycopg2.extensions.cursor):
+    query = """
+    INSERT INTO Related_text_source (source_id, source_type, author, date_info, concept, title)
+    VALUES %s
+    ON CONFLICT (source_id) DO NOTHING;
+    """
+    values: list[tuple[str, str, str, str, str]] = []
+    for source_id, value in tv_mapping.items():
+        values.append(
+            (
+                source_id,
+                value["source_type"],
+                value["author"],
+                value["date_info"],
+                value["concept"],
+                value["title"],
+            ),
+        )
+
+    execute_values(cursor, query, values)
 
 
 def process_df(
@@ -185,17 +730,18 @@ def process_df(
     page_size: int = 1000,
 ):
     # infer the mv, tv, soura, aya, and number of ayas this tafsir covers from the tafsir_id column
-    df["mv"], df["tv"], df["soura"], df["aya"], df["size"] = df["tafsir_id"].str.split(
+    df[["mv", "tv", "soura", "aya", "size"]] = df["tafsir_id"].str.split(
         "_", expand=True
     )
     # convert to integers
     df[["soura", "aya", "size"]] = df[["soura", "aya", "size"]].astype(int)
-    # use the map defined above to get the source name
-    df["source"] = df[["mv", "tv"]].apply(lambda x: tv_mapping.get(tuple(x)), axis=1)
+    # get the source ID from the mv and tv values
+    df["source_id"] = df["mv"].astype(str) + "_" + df["tv"].astype(str)
     # divide the tafsir on the sentence level
     df["sentences"] = df["text"].map(to_sentences)
     # explode the sentences column to have one sentence per row
     sentences = df.explode("sentences", ignore_index=True)
+    # the ID is the <tafsir_id>_<index>
     sentences["related_text_id"] = (
         sentences["tafsir_id"]
         + "_"
@@ -203,36 +749,31 @@ def process_df(
     )
     sentences.rename(columns={"sentences": "details"}, inplace=True)
 
-    related_rows = sentences[["related_text_id", "details", "source"]].values.tolist()
-    relationship_rows = []
-    entity_rows_set = set()
-    ert_rows = []
-    for row in tqdm(sentences.itertuples()):
-        # iterate over the sentences and create the relationship rows
-        # extract the named entities from each sentence
-        aya: int = row.aya
-        soura: int = row.soura
-        related_text_id: str = row.related_text_id
-        size: int = row.size
-        details: str = row.details
-        relationship_rows.extend(
-            [(aya + j, soura, related_text_id) for j in range(size)]
-        )
-
-        for ent, typ in wojood.find_entities(details):
-            entity_rows_set.add((ent, typ))
-            ert_rows.append((ent, typ, related_text_id))
+    related_rows = sentences[
+        ["related_text_id", "details", "source_id"]
+    ].values.tolist()
 
     execute_values(
         cursor,
         """
-        INSERT INTO related_text (related_id, details, source)
+        INSERT INTO related_text (related_id, details, source_id)
         VALUES %s
         ON CONFLICT (related_id) DO NOTHING
         """,
         related_rows,
         page_size=page_size,
     )
+
+    relationship_rows = []
+    for row in tqdm(sentences.itertuples()):
+        # iterate over the sentences and create the relationship rows
+        aya: int = row.aya
+        soura: int = row.soura
+        related_text_id: str = row.related_text_id
+        size: int = row.size
+        relationship_rows.extend(
+            [(aya + j, soura, related_text_id) for j in range(size)]
+        )
 
     execute_values(
         cursor,
@@ -245,33 +786,6 @@ def process_df(
         page_size=page_size,
     )
 
-    entity_rows = list(entity_rows_set)
-    id_rows = execute_values(
-        cursor,
-        """
-        INSERT INTO entity (entity_name, entity_type)
-        VALUES %s
-        ON CONFLICT (entity_name, entity_type) DO UPDATE
-            SET entity_name = EXCLUDED.entity_name
-        RETURNING entity_id, entity_name, entity_type
-        """,
-        entity_rows,
-        fetch=True,
-    )
-
-    ent_map = {(n, t): i for i, n, t in id_rows}
-    # get the entities and insert them into the table
-    ert_values = [(ent_map[(e, t)], rel_id, None) for e, t, rel_id in ert_rows]
-    execute_values(
-        cursor,
-        """
-        INSERT INTO entity_related_text (entity_id, related_text_id, relationship_type)
-        VALUES %s
-        ON CONFLICT DO NOTHING
-        """,
-        ert_values,
-        page_size=page_size,
-    )
     cursor.connection.commit()
     print("File processed:", file)
     os.makedirs("data/done", exist_ok=True)
@@ -285,6 +799,7 @@ def main():
     db_password = os.getenv("DB_PASSWORD")
     db_host = os.getenv("DB_HOST")
     db_port = os.getenv("DB_PORT")
+    DATA_DIR = os.getenv("DATA_DIR")
     # connect to the database
     connection = psycopg2.connect(
         dbname=db_name,
@@ -294,41 +809,17 @@ def main():
         port=db_port,
     )
     cursor = connection.cursor()
-    # execute SQL in db/tables.sql to create the database and tables if not created
-    with open("db/tables.sql", "r") as f:
-        sql = f.read()
-
-    cursor.execute(sql)
+    create_tables(cursor)
+    add_sentences(cursor)
+    add_sources(cursor)
     connection.commit()
-    df = pd.read_csv("data/quran.csv")
 
-    query = """
-    INSERT INTO Sentence (sentence_id, section_id, paragraph_id, text)
-    VALUES (%s, %s, %s, %s)
-    ON CONFLICT (sentence_id, section_id)
-    DO NOTHING;
-    """
-
-    for i, row in df.iterrows():
-        row["aya"] = int(row["aya"])
-        row["sura"] = int(row["sura"])
-        cursor.execute(
-            query,
-            (
-                row["aya"],
-                row["sura"],
-                None,
-                cleaner.cleanText(row["text"]),
-            ),
-        )
-
-    for dir in os.listdir("data"):
-        if not dir.startswith("tafseer"):
-            continue
-        dir = os.path.join("data", dir)
-        for file in tqdm(os.listdir(dir)):
-            file = os.path.join(dir, file)
-            process_df(pd.read_csv(file), file, cursor)
+    for i, file in enumerate(os.listdir(DATA_DIR)):
+        file = os.path.join(DATA_DIR, file)
+        process_df(pd.read_csv(file), file, cursor)
+        connection.commit()
+        # if i == 3:
+        #     input()
 
 
 if __name__ == "__main__":

@@ -1,32 +1,8 @@
 from pyarabic import araby
 from camel_tools.utils.normalize import normalize_unicode
 import re
-import wojood.utils as utils
-import pandas as pd
-from wojood.ner_shell import process_ner
 
 ZERO_SPACE_CHAR = "\u200c"
-
-
-class Wojood:
-    wojood_tagger = utils.get_tagger()
-
-    def find_entities(self, textList: str | list) -> list[tuple[str, str]]:
-        """
-        Returns a list of tuples of the form (entity, tag).
-        """
-        if isinstance(textList, str):
-            textList = [textList]
-        df = pd.DataFrame({"text": textList})
-        entity_tag_list: list[tuple[str, str]] = process_ner(
-            df,
-            self.wojood_tagger,
-            text_column_name="text",
-            batch_size=1,
-            id_column_name=None,
-        )
-
-        return entity_tag_list
 
 
 class TextCleaner:
