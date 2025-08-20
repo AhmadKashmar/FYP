@@ -1,3 +1,7 @@
+-- DROP TABLE IF EXISTS relationship;
+-- DROP TABLE IF EXISTS Related_text;
+-- DROP TABLE IF EXISTS Related_text_source;
+-- DROP TABLE IF EXISTS Sentence;
 CREATE TABLE
     IF NOT EXISTS Sentence (
         sentence_id INT NOT NULL,
@@ -8,10 +12,21 @@ CREATE TABLE
     );
 
 CREATE TABLE
+    IF NOT EXISTS Related_text_source (
+        source_id VARCHAR PRIMARY KEY,
+        source_type VARCHAR NOT NULL,
+        author VARCHAR,
+        date_info VARCHAR,
+        concept VARCHAR,
+        title VARCHAR NOT NULL
+    );
+
+CREATE TABLE
     IF NOT EXISTS Related_text (
         related_id VARCHAR PRIMARY KEY,
         details TEXT NOT NULL,
-        source VARCHAR
+        source_id VARCHAR,
+        FOREIGN KEY (source_id) REFERENCES Related_text_source (source_id)
     );
 
 CREATE TABLE
