@@ -346,7 +346,8 @@ class RetrieverBySource(RelatedTextRetriever):
                 sentence.score = [self.score_sentence(sentence)]
             results.extend(result)
         # merge each sentence so that all its related texts are grouped
-        self.merge_sentences(results)
+        results = self.merge_sentences(results)
+        results = self.filter_results(results)
         return results
 
     def related_texts_to_sentences(
@@ -423,3 +424,21 @@ class RetrieverBySource(RelatedTextRetriever):
             sentence.final_score = self.get_score(sentence.score)
         # now each sentence has its final score
         return sentences
+
+    def filter_results(
+        self,
+        results: list[SentenceRelatedTexts],
+        sentence_threshold=1,
+        rt_threshold=0.5,
+    ) -> list[SentenceRelatedTexts]:
+        filtered_results: list[SentenceRelatedTexts] = []
+        # we need to delete sentences that have a final score below the threshold
+        for sentence in results:
+            if sentence.final_score >= sentence_threshold:
+                filtered_results.append(sentence)
+        # now for the remaining sentences, filter the related texts with a low contribution
+        for sentence in filtered_results:
+            sentence.related_texts = [
+                rt for rt in sentence.related_texts if rt.similarity >= rt_threshold
+            ]
+        return filtered_results
