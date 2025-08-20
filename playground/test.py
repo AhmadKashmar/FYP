@@ -188,24 +188,6 @@ class SentenceRetriever:
         self.conn = conn
         self.cursor = conn.cursor()
 
-    def retrieve_by_threshold(
-        self, user_query: str, threshold: float = 0.6, sql_query: str = None
-    ) -> list[Sentence]:
-        embedding = embed(user_query)
-        if sql_query is None:
-            sql_query = """
-                SELECT sentence_id, section_id, text, 1 - distance AS similarity
-                FROM (
-                SELECT sentence_id, section_id, text, (embedding <=> %s) AS distance
-                FROM sentence
-                ) t
-                WHERE distance < %s
-                ORDER BY distance
-            """
-        execute_query(self.cursor, self.conn, sql_query, (embedding, 1 - threshold))
-        rows = self.cursor.fetchall()
-        return [Sentence(*row) for row in rows]
-
     def retrieve_by_count(
         self, user_query: str, count: int, sql_query: str = None
     ) -> list[Sentence]:
@@ -230,32 +212,6 @@ class RelatedTextRetriever:
     def __init__(self, conn: psycopg2.extensions.connection = connect()):
         self.conn = conn
         self.cursor = conn.cursor()
-
-    def retrieve_by_threshold(
-        self, user_query: str, threshold: float = 0.6, sql_query: str = None
-    ) -> list[RelatedText]:
-        embedding = embed(user_query)
-
-        if sql_query is None:
-            sql_query = """
-                WITH ranked AS (
-                SELECT
-                    rt.related_id, rt.details,
-                    src.source_id, src.source_type, src.author, src.date_info, src.concept, src.title,
-                    (rt.embedding <=> %s) AS rt_distance,
-                    s.sentence_id, s.section_id, s.text
-                FROM related_text rt
-                LEFT JOIN related_text_source src ON src.source_id = rt.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = rt.related_id
-                LEFT JOIN sentence s ON s.sentence_id = rel.sentence_id AND s.section_id = rel.section_id
-                )
-                SELECT * FROM ranked
-                WHERE rt_distance < %s
-                ORDER BY rt_distance NULLS LAST
-            """
-
-        execute_query(self.cursor, self.conn, sql_query, (embedding, 1 - threshold))
-        return self.process_rows(self.cursor.fetchall())
 
     def retrieve_by_count(
         self, user_query: str, count: int, sql_query: str = None
