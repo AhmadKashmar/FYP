@@ -10,6 +10,9 @@
     DB_PASSWORD=your_db_password
     DB_PORT=your_db_port
     HOST_DATA_PATH=//c/Users/ahmad/Desktop:
+    DATA_DIR=directory/containing/csv/files
+    VECTOR_DIM ="1024" # dimensions of the embedding vectors
+    RAM_LIMIT="14GB" # how much ram usable while indexing database (default 64MB limit makes it impossible)
     ```
 
 3. Create a postgres container with the following command:
@@ -24,7 +27,7 @@
     python db/csv_to_db.py
     ```
 
-5. Change the VECTOR_DIM value in `db/alter_tables.py` to match your embedding model (currently set to 1024), then create that column.
+5. Create embeddings column.
 
     ```bash
      python db/alter_tables.py

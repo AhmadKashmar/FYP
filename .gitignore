@@ -7,3 +7,6 @@ test.ipynb
 .env
 data/
 temp/
+notes.md
+logs/
+__pycache__/
