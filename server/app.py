@@ -43,8 +43,12 @@ def query():
     }
     """
     data = flask.request.get_json()
-    query = data.get("query", "")
-    sources = data.get("sources", retriever.source_ids)
+    query = data.get("query", None)
+    if not query:
+        return {"error": "Query is required"}, 400
+    sources = data.get("sources")
+    if not sources:
+        sources = retriever.source_ids
     sentences_related_texts = retriever.retrieve(query, sources)
     sentences = [st.to_dict() for st in sentences_related_texts]
     response = {"sentences": sentences}
@@ -70,6 +74,14 @@ def query_with_inference():
     # currently a placeholder till we set up LLM
     dump = json.dumps({"response": sentences}, ensure_ascii=False, indent=4)
     return dump, 200
+
+
+@app.route("/sources", methods=["GET"])
+def get_sources():
+    """
+    This endpoint returns the list of available source IDs.
+    """
+    return {"sources": retriever.sources}, 200
 
 
 if __name__ == "__main__":

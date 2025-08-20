@@ -284,15 +284,16 @@ class RetrieverBySource(RelatedTextRetriever):
     def __init__(self, conn: psycopg2.extensions.connection = connect(), **kwargs):
         self.conn = conn
         self.cursor = conn.cursor()
-        self.source_ids = self.get_source_ids()
+        self.source_ids, self.sources = self.get_source_ids()
         self.base = kwargs.get("base", 0.5)
 
     def get_source_ids(self) -> list[str]:
         sql_query = """
-        SELECT source_id FROM related_text_source
+        SELECT source_id, source_type, author, date_info, concept, title FROM related_text_source
         """
         self.cursor.execute(sql_query)
         self.source_ids = [row[0] for row in self.cursor.fetchall()]
+        self.sources = [Source(*row).to_dict() for row in self.cursor.fetchall()]
         return self.source_ids
 
     def retrieve_by_source_id(
