@@ -5,7 +5,7 @@ import json
 app = flask.Flask(__name__)
 
 retriever = RetrieverBySource()
-DEFAULT_COUNT = 2
+DEFAULT_COUNT = 50
 
 @app.route("/query-without-inference", methods=["POST"])
 def query():
@@ -13,7 +13,34 @@ def query():
     This endpoint expects the following from the user
     1. The list of source_ids to check (if not specified, checks all)
     2. The user query
-    ...
+    The endpoint returns a dictionary as follows:
+    {
+        "sentences": [
+            {
+               "sentence": {
+                   "sentence_id": integer,
+                   "section_id": integer,
+                   "text": "string",
+                   "similarity": float, # can be ignored
+                   "related_text_ids": ["string", ...]
+               },
+            },
+            ...
+        ]
+        "related_texts": [
+            {
+                "source_id": [ # for this source, we have the following related texts
+                    {
+                        "related_text_id": "string",
+                        "details": "string",
+                        "similarity": float # can be ignored
+                    },
+                    ...
+                ]
+            },
+            ...
+        ]
+    }
     """
     data = flask.request.get_json()
     query = data.get("query", None)
@@ -23,7 +50,7 @@ def query():
     if not sources:
         sources = retriever.source_ids
     try:
-        sentences_related_texts = retriever.retrieve(query, sources, DEFAULT_COUNT)
+        results = retriever.retrieve(query, sources, DEFAULT_COUNT)
     except Exception as e:
         # rollback on error
         try:
@@ -31,8 +58,7 @@ def query():
         except Exception:
             pass
         raise e
-    sentences = [st.to_dict() for st in sentences_related_texts]
-    response = {"sentences": sentences}
+    response = results.to_dict()
     return response, 200
 
 
@@ -49,7 +75,7 @@ def query_with_inference():
     query: str = data.get("query", "")
     sources: list[str] = data.get("sources", retriever.source_ids)
     try:
-        sentences_related_texts = retriever.retrieve(query, sources, DEFAULT_COUNT)
+        results = retriever.retrieve(query, sources, DEFAULT_COUNT)
     except Exception as e:
         # rollback on error
         try:
@@ -57,9 +83,9 @@ def query_with_inference():
         except Exception:
             pass
         raise e
-    sentences = [st.to_dict() for st in sentences_related_texts]
+    response = results.to_dict()
     # currently a placeholder till we set up LLM
-    dump = json.dumps({"response": sentences}, ensure_ascii=False, indent=4)
+    dump = json.dumps({"response": str(response)}, ensure_ascii=False, indent=4)
     return dump, 200
 
 
