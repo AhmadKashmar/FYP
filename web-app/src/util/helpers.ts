@@ -4,7 +4,6 @@ import { Sentence, RelatedText, ChatResponse, Source } from "./types";
 const GLOBAL_ID_MAP = new Map<string, number>();
 /** Global counter for new related texts across calls */
 let GLOBAL_REF_SEQ = 0;
-/** Optional: reset global state when you need to (tests, dev, etc.) */
 export function resetGlobalRefs(to = 0) {
 	GLOBAL_REF_SEQ = to;
 	GLOBAL_ID_MAP.clear();
@@ -13,13 +12,25 @@ export function resetGlobalRefs(to = 0) {
 type WithGlobal = RelatedText & { g: number };
 
 export function sentencesAndRelatedTextsToChatResponse(
-	sentences: Sentence[], // sorted
-	relatedTexts: RelatedText[], // sorted by appearance (may span many sources)
-	sources: Source[] // metadata
+	sentences: Sentence[],
+	relatedTexts: RelatedText[],
+	sources: Source[]
 ): ChatResponse {
-	const cid = "c" + Math.random().toString(36).slice(2, 8); // per-render scope
+	if (
+		(!sentences || sentences.length === 0) &&
+		(!relatedTexts || relatedTexts.length === 0)
+	) {
+		return {
+			answer:
+				`<div class="chat-answer" dir="rtl" lang="ar">` +
+				`<p class="no-data">لم أجد معلومات مفيدة.</p>` +
+				`</div>`,
+		};
+	}
 
-	// 1) Group related texts by source & assign GLOBAL numbers (persist across calls)
+	const cid = "c" + Math.random().toString(36).slice(2, 8);
+
+	/* 1) Assign GLOBAL numbers & group tafāsīr by source (preserve insertion order) */
 	const relatedBySource = new Map<string, WithGlobal[]>();
 	for (const rt of relatedTexts) {
 		let g = GLOBAL_ID_MAP.get(rt.related_text_id);
@@ -30,22 +41,12 @@ export function sentencesAndRelatedTextsToChatResponse(
 		if (!relatedBySource.has(rt.source_id)) relatedBySource.set(rt.source_id, []);
 		relatedBySource.get(rt.source_id)!.push({ ...rt, g });
 	}
-	const sourceOrder = Array.from(relatedBySource.keys());
 
-	// 2) Build LOCAL display numbering (resets to 1 each call)
-	const localByGlobal = new Map<number, number>();
-	let localCounter = 0;
-	for (const sid of sourceOrder) {
-		for (const rt of relatedBySource.get(sid)!) {
-			if (!localByGlobal.has(rt.g)) localByGlobal.set(rt.g, ++localCounter);
-		}
-	}
-
-	// 3) Source lookup
+	/* 2) Source lookup */
 	const sourceById = new Map<string, Source>();
 	for (const s of sources) sourceById.set(s.source_id, s);
 
-	// 4) Group sentences by section (safeguard sort)
+	/* 3) Group sentences by section (safe sort) */
 	const bySection = new Map<number, Sentence[]>();
 	for (const s of sentences) {
 		if (!bySection.has(s.section_id)) bySection.set(s.section_id, []);
@@ -56,46 +57,93 @@ export function sentencesAndRelatedTextsToChatResponse(
 		bySection.get(id)!.sort((a, b) => a.sentence_id - b.sentence_id);
 	}
 
-	// 5) Render
-	const parts: string[] = [];
-	parts.push(`<div class="chat-answer" dir="rtl" lang="ar" data-cid="${cid}">`);
-
-	// ===== الآيات =====
-	parts.push(`<h3 class="section-title">الآيات</h3>`);
-	parts.push(`<ul class="verses">`);
-
-	// Track any global refs used in verses that did not appear in relatedTexts for this render,
-	// so we can append invisible placeholders at the end (ensures anchors always have a target).
+	/* 4) LOCAL numbering by first appearance in verses */
+	const localByGlobal = new Map<number, number>();
+	let localCounter = 0;
 	const missingGlobals = new Set<number>();
 
 	for (const secId of sectionIds) {
 		for (const s of bySection.get(secId)!) {
-			// Map sentence refs -> GLOBAL numbers (assign new globals if unseen)
-			const gRefs = Array.from(
-				new Set(
-					(s.related_text_ids || []).map((id) => {
-						let g = GLOBAL_ID_MAP.get(id);
-						if (g == null) {
-							g = ++GLOBAL_REF_SEQ;
-							GLOBAL_ID_MAP.set(id, g);
-							missingGlobals.add(g); // will not have a real tafsir in this render
-						}
-						return g;
-					})
-				)
-			).sort((a, b) => a - b);
+			const seenInVerse = new Set<string>();
+			for (const relId of s.related_text_ids || []) {
+				if (seenInVerse.has(relId)) continue;
+				seenInVerse.add(relId);
 
-			// Compute LOCAL display numbers for those globals
-			const localRefs = gRefs.map((g) => {
-				let d = localByGlobal.get(g);
-				if (d == null) {
-					d = ++localCounter; // show it locally even if the tafsir isn't in this render
-					localByGlobal.set(g, d);
+				let g = GLOBAL_ID_MAP.get(relId);
+				if (g == null) {
+					g = ++GLOBAL_REF_SEQ;
+					GLOBAL_ID_MAP.set(relId, g);
+					missingGlobals.add(g);
 				}
-				return { g, d };
-			});
+				if (!localByGlobal.has(g)) {
+					localByGlobal.set(g, ++localCounter);
+				}
+			}
+		}
+	}
 
-			// Verse line: {TEXT} [section:sentence] then superscript anchors
+	/* 5) Build sorted source order & per-source lists based on LOCAL numbers */
+	type Enriched = WithGlobal & { d: number | null };
+	const enrichedBySource = new Map<string, Enriched[]>();
+
+	// ⬇️ Replace `for...of (relatedBySource)` with typed forEach to avoid downlevelIteration need
+	relatedBySource.forEach((list: WithGlobal[], sid: string) => {
+		const enriched: Enriched[] = list.map((rt: WithGlobal) => ({
+			...rt,
+			d: localByGlobal.has(rt.g) ? (localByGlobal.get(rt.g) as number) : null,
+		}));
+		// sort tafāsīr within the source by local number (nulls last)
+		enriched.sort((a: Enriched, b: Enriched) => {
+			const da = a.d ?? Number.POSITIVE_INFINITY;
+			const db = b.d ?? Number.POSITIVE_INFINITY;
+			if (da !== db) return da - db;
+			return 0; // keep original order on tie
+		});
+		enrichedBySource.set(sid, enriched);
+	});
+
+	// Sort sources by the minimum local number they contain (nulls last)
+	const sourceOrder = Array.from(enrichedBySource.keys()).sort((sa, sb) => {
+		const la = enrichedBySource.get(sa)!;
+		const lb = enrichedBySource.get(sb)!;
+		const mina = la.reduce(
+			(m, x) => (x.d != null && x.d < m ? x.d : m),
+			Number.POSITIVE_INFINITY
+		);
+		const minb = lb.reduce(
+			(m, x) => (x.d != null && x.d < m ? x.d : m),
+			Number.POSITIVE_INFINITY
+		);
+		return mina - minb;
+	});
+
+	/* 6) Render */
+	const parts: string[] = [];
+	parts.push(`<div class="chat-answer" dir="rtl" lang="ar" data-cid="${cid}">`);
+
+	// === الآيات ===
+	parts.push(`<h3 class="section-title">الآيات</h3>`);
+	parts.push(`<ul class="verses">`);
+
+	for (const secId of sectionIds) {
+		for (const s of bySection.get(secId)!) {
+			// verse order, dedup
+			const verseGlobals: number[] = [];
+			const seen = new Set<number>();
+			for (const relId of s.related_text_ids || []) {
+				let g = GLOBAL_ID_MAP.get(relId);
+				if (g == null) {
+					g = ++GLOBAL_REF_SEQ;
+					GLOBAL_ID_MAP.set(relId, g);
+					missingGlobals.add(g);
+					if (!localByGlobal.has(g)) localByGlobal.set(g, ++localCounter);
+				}
+				if (!seen.has(g)) {
+					seen.add(g);
+					verseGlobals.push(g);
+				}
+			}
+
 			parts.push(
 				`<li class="verse" id="${cid}-s-${s.section_id}-${s.sentence_id}">` +
 					`<span class="aya-braced">{</span>` +
@@ -104,13 +152,13 @@ export function sentencesAndRelatedTextsToChatResponse(
 					` <span class="verse-label" dir="ltr">[${escapeHtml(
 						String(s.section_id)
 					)}:${escapeHtml(String(s.sentence_id))}]</span>` +
-					(localRefs.length
+					(verseGlobals.length
 						? ` <span class="refs">` +
-						  localRefs
-								.map(
-									({ g, d }) =>
-										`<a class="ref" href="#${cid}-taf-${g}" data-cid="${cid}" data-ref-global="${g}" data-ref-display="${d}"><sup>${d}</sup></a>`
-								)
+						  verseGlobals
+								.map((g) => {
+									const d = localByGlobal.get(g)!; // already assigned
+									return `<a class="ref" href="#${cid}-taf-${g}" data-cid="${cid}" data-ref-global="${g}" data-ref-display="${d}"><sup>${d}</sup></a>`;
+								})
 								.join(" ") +
 						  `</span>`
 						: ``) +
@@ -118,46 +166,41 @@ export function sentencesAndRelatedTextsToChatResponse(
 			);
 		}
 	}
-
 	parts.push(`</ul>`);
 
-	// ===== التفاسير =====
+	// === التفاسير ===
 	parts.push(`<h3 class="section-title">التفاسير</h3>`);
 
-	for (const sid of sourceOrder) {
+	// use forEach to avoid `for...of` over Map/iterables
+	sourceOrder.forEach((sid: string) => {
 		const src = sourceById.get(sid);
-		const list = relatedBySource.get(sid)!; // WithGlobal[]
+		const list = enrichedBySource.get(sid)!; // Enriched[]
 
-		// Heading: title (concept) - author - date_info - [source_type]
 		const title = src?.title || sid || "مصدر غير معروف";
 		const concept = src?.concept ? ` (${escapeHtml(src.concept)})` : "";
 		const author = src?.author ? ` - ${escapeHtml(src.author)}` : "";
 		const dateInfo = src?.date_info ? ` - ${escapeHtml(src.date_info)}` : "";
 		const stype = src?.source_type ? ` - [${escapeHtml(src.source_type)}]` : "";
+
 		parts.push(
 			`<h2 class="source-heading">${escapeHtml(
 				title
 			)}${concept}${author}${dateInfo}${stype}</h2>`
 		);
 
-		// Each tafsir as <p id="${cid}-taf-${g}">
-		for (const rt of list) {
-			const g = rt.g;
-			const d = localByGlobal.get(g)!; // local display number for this render
+		list.forEach((rt: Enriched) => {
 			parts.push(
-				`<p class="tafsir" id="${cid}-taf-${g}" data-ref-global="${g}" data-ref-display="${d}">` +
-					`${renderImportant(rt.details)}` +
-					`</p>`
+				`<p class="tafsir" id="${cid}-taf-${rt.g}" data-ref-global="${rt.g}"` +
+					(rt.d != null ? ` data-ref-display="${rt.d}"` : ``) +
+					`>${renderImportant(rt.details)}</p>`
 			);
-			// If this global was in the "missing" set (referenced in verses but not in list),
-			// showing it now means it's no longer missing.
-			missingGlobals.delete(g);
-		}
-	}
+			missingGlobals.delete(rt.g);
+		});
+	});
 
-	// Placeholders for any verse refs whose tafsir wasn’t included this render
+	// Invisible placeholders for any verse refs that didn't have tafsir in this render
 	if (missingGlobals.size) {
-		missingGlobals.forEach((g) => {
+		missingGlobals.forEach((g: number) => {
 			parts.push(
 				`<p id="${cid}-taf-${g}" class="tafsir placeholder" style="height:0;margin:0;padding:0;overflow:hidden;"></p>`
 			);
@@ -165,7 +208,6 @@ export function sentencesAndRelatedTextsToChatResponse(
 	}
 
 	parts.push(`</div>`);
-
 	return { answer: parts.join("") };
 }
 
@@ -180,14 +222,12 @@ function escapeHtml(s: string): string {
 		.replace(/'/g, "&#39;");
 }
 
-/** Replace $$...$$ with <span class="important">...</span>, safely escaped */
 function renderImportant(text: string): string {
 	if (!text) return "";
 	const re = /\$\$([\s\S]*?)\$\$/g;
 	let out = "";
 	let last = 0;
 	let m: RegExpExecArray | null;
-
 	while ((m = re.exec(text))) {
 		out += escapeHtml(text.slice(last, m.index));
 		out += `<span class="important">${escapeHtml(m[1])}</span>`;

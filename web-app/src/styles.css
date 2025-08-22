@@ -1,4 +1,7 @@
 /* TODO: separate per component */
+* {
+	font-family: "Ubuntu", sans-serif;
+}
 
 body {
 	margin: 0;
@@ -115,6 +118,7 @@ body {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
+	scroll-behavior: smooth
 }
 
 .message {
@@ -297,15 +301,25 @@ body {
 	list-style: none;
 	padding-inline-start: 1.25rem;
 	margin: 0;
+	text-align: justify;
 }
 .chat-answer .dash {
 	margin-inline-end: 0.4em;
+	text-align: justify;
+
 }
 .chat-answer .refs .ref {
 	text-decoration: none;
+	text-align: justify;
+
 }
 .chat-answer .important {
 	background: rgba(255, 230, 0, 0.35);
 	padding: 0 0.2em;
 	border-radius: 0.2em;
+	text-align: justify;
+}
+
+p {
+	text-align: justify;
 }
