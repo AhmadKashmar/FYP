@@ -10,4 +10,5 @@ temp/
 notes.md
 logs/
 __pycache__/
-web-app/node_modules/
+node_modules
+*env
