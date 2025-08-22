@@ -35,14 +35,13 @@ def query():
         ],
         "related_texts": [
             {
-                "source_id": [ # for this source, we have the following related texts
-                    {
-                        "related_text_id": "string",
-                        "details": "string",
-                        "similarity": float # can be ignored
-                    },
-                    ...
-                ]
+                {
+                    "related_text_id": "string",
+                    "details": "string",
+                    "similarity": float, # can be ignored
+                    "source_id": "string"
+                },
+                ...
             },
             ...
         ]
