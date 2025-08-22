@@ -47,12 +47,11 @@ def setup_logger(app_name="logs"):
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter("%(levelname)s - %(message)s")
+    console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
     return logger
-
 
 logger = setup_logger()
 model = os.environ.get("EMBEDDING_MODEL")
@@ -114,7 +113,7 @@ class Sentence:
             "sentence_id": self.sentence_id,
             "section_id": self.section_id,
             "text": self.text,
-            "similarity": self.similarity,
+            # "similarity": self.similarity,
         }
 
 
@@ -178,7 +177,9 @@ class SentenceRelatedTexts:
                 }
             )
 
-        return {"sentence": self.sentence.to_dict(), "related_texts": source_list}
+        result = {"sentence": self.sentence.to_dict(), "related_texts": source_list}
+        result["sentence"]["similarity"] = self.final_score
+        return result
 
 
 class SentenceRetriever:
@@ -219,20 +220,61 @@ class RelatedTextRetriever:
         embedding = embed(user_query)
         if sql_query is None:
             sql_query = """
-                SELECT
-                rt.related_id, rt.details,
-                src.source_id, src.source_type, src.author, src.date_info, src.concept, src.title,
-                (rt.embedding <=> %s) AS rt_distance,
-                s.sentence_id, s.section_id, s.text
+                WITH candidates AS (
+                SELECT rt.related_id, rt.source_id
                 FROM related_text rt
-                LEFT JOIN related_text_source src ON src.source_id = rt.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = rt.related_id
-                LEFT JOIN sentence s ON s.sentence_id = rel.sentence_id AND s.section_id = rel.section_id
-                ORDER BY rt_distance NULLS LAST
+                WHERE rt.embedding IS NOT NULL
+                ORDER BY rt.embedding <=> %s
                 LIMIT %s
+                ),
+                scored AS (
+                SELECT
+                    rt.related_id,
+                    rt.source_id,
+                    (rt.embedding <=> %s) AS rt_distance,
+                    split_part(rt.related_id,'_',1) AS p1,
+                    split_part(rt.related_id,'_',2) AS p2,
+                    split_part(rt.related_id,'_',3) AS p3,
+                    split_part(rt.related_id,'_',4) AS p4,
+                    split_part(rt.related_id,'_',5) AS p5,
+                    (split_part(rt.related_id,'_',6))::int AS part_no
+                FROM related_text rt
+                JOIN candidates c USING (related_id, source_id)
+                ),
+                siblings AS (
+                SELECT
+                    t.related_id AS target_id,
+                    string_agg(
+                    CASE WHEN r.related_id = t.related_id
+                        THEN '$$' || r.details || '$$'
+                        ELSE r.details
+                    END,
+                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                    ) AS merged_details
+                FROM related_text r
+                JOIN scored t
+                    ON split_part(r.related_id,'_',1) = t.p1
+                AND split_part(r.related_id,'_',2) = t.p2
+                AND split_part(r.related_id,'_',3) = t.p3
+                AND split_part(r.related_id,'_',4) = t.p4
+                AND split_part(r.related_id,'_',5) = t.p5
+                GROUP BY t.related_id
+                )
+                SELECT
+                t.related_id,
+                s.merged_details AS details,
+                src.source_id, src.source_type, src.author, src.date_info, src.concept, src.title,
+                t.rt_distance,
+                snt.sentence_id, snt.section_id, snt.text
+                FROM scored t
+                JOIN siblings s ON s.target_id = t.related_id
+                LEFT JOIN related_text_source src ON src.source_id = t.source_id
+                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
+                ORDER BY t.rt_distance;
             """
 
-        execute_query(self.cursor, self.conn, sql_query, (embedding, count))
+        execute_query(self.cursor, self.conn, sql_query, (embedding, count, embedding))
         return self.process_rows(self.cursor.fetchall())
 
     def process_rows(
@@ -283,25 +325,25 @@ class RelatedTextRetriever:
 
         # for each related text, we need to fetch its siblings
         # siblings have the same prefix id
-        for rt in related_texts:
-            idx = rt.related_text_id.rfind("_")
-            prefix = rt.related_text_id[:idx] + "_"
-            prefix_query = f"""
-            SELECT related_id, details FROM related_text
-            WHERE related_id LIKE '{prefix}%'
-            """
-            execute_query(self.cursor, self.conn, prefix_query)
-            siblings = self.cursor.fetchall()
-            siblings = [
-                (related_id.rsplit("_", 1)[-1], details)
-                for related_id, details in siblings
-            ]
-            for i, (id, details) in enumerate(siblings):
-                if id == rt.related_text_id.rsplit("_", 1)[-1]:
-                    siblings[i] = (id, "$$" + details + "$$")
-            siblings.sort(key=lambda x: int(x[0]))
-            siblings = [details for _, details in siblings]
-            rt.details = " ".join(siblings)
+        # for rt in related_texts:
+        #     idx = rt.related_text_id.rfind("_")
+        #     prefix = rt.related_text_id[:idx] + "_"
+        #     prefix_query = f"""
+        #     SELECT related_id, details FROM related_text
+        #     WHERE related_id LIKE '{prefix}%'
+        #     """
+        #     execute_query(self.cursor, self.conn, prefix_query)
+        #     siblings = self.cursor.fetchall()
+        #     siblings = [
+        #         (related_id.rsplit("_", 1)[-1], details)
+        #         for related_id, details in siblings
+        #     ]
+        #     for i, (id, details) in enumerate(siblings):
+        #         if id == rt.related_text_id.rsplit("_", 1)[-1]:
+        #             siblings[i] = (id, "$$" + details + "$$")
+        #     siblings.sort(key=lambda x: int(x[0]))
+        #     siblings = [details for _, details in siblings]
+        #     rt.details = " ".join(siblings)
 
         return related_texts
 
@@ -311,8 +353,9 @@ class RetrieverBySource(RelatedTextRetriever):
         self.conn = conn
         self.cursor = conn.cursor()
         self.source_ids, self.sources = self.get_source_ids()
-        print("Source IDs: ", self.source_ids)
-        self.base = kwargs.get("base", 0.5)
+        self.base = kwargs.get("base", 0.3)
+        self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
+        self.rt_threshold = kwargs.get("rt_threshold", 0.5)
 
     def get_source_ids(self) -> tuple[list[str], list[dict]]:
         sql_query = """
@@ -329,24 +372,64 @@ class RetrieverBySource(RelatedTextRetriever):
         source_id: str,
         count: int,
     ) -> list[RelatedText]:
+        if source_id not in self.source_ids:
+            logger.error(f"Source ID {source_id} not found in available sources.")
+            return []
         sql_query = f"""
-        SELECT
-            rt.related_id, rt.details,
-            src.source_id, src.source_type, src.author, src.date_info, src.concept, src.title,
-            (rt.embedding <=> %s) AS rt_distance,
-            s.sentence_id, s.section_id, s.text
-        FROM related_text AS rt
-        LEFT JOIN related_text_source AS src
-            ON src.source_id = rt.source_id
-        LEFT JOIN relationship AS rel
-            ON rel.related_text_id = rt.related_id
-        LEFT JOIN sentence AS s
-            ON s.sentence_id = rel.sentence_id
-        AND s.section_id  = rel.section_id
-        WHERE rt.source_id = '{source_id}'
-        ORDER BY rt_distance NULLS LAST
-        LIMIT %s
-        """
+                WITH candidates AS (
+                SELECT rt.related_id, rt.source_id
+                FROM related_text rt
+                WHERE rt.source_id = '{source_id}'
+                    AND rt.embedding IS NOT NULL
+                ORDER BY rt.embedding <=> %s
+                LIMIT %s
+                ),
+                scored AS (
+                SELECT
+                    rt.related_id,
+                    rt.source_id,
+                    (rt.embedding <=> %s) AS rt_distance,
+                    split_part(rt.related_id,'_',1) AS p1,
+                    split_part(rt.related_id,'_',2) AS p2,
+                    split_part(rt.related_id,'_',3) AS p3,
+                    split_part(rt.related_id,'_',4) AS p4,
+                    split_part(rt.related_id,'_',5) AS p5,
+                    (split_part(rt.related_id,'_',6))::int AS part_no
+                FROM related_text rt
+                JOIN candidates c USING (related_id, source_id)
+                ),
+                siblings AS (
+                SELECT
+                    t.related_id AS target_id,
+                    string_agg(
+                    CASE WHEN r.related_id = t.related_id
+                        THEN '$$' || r.details || '$$'
+                        ELSE r.details
+                    END,
+                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                    ) AS merged_details
+                FROM related_text r
+                JOIN scored t
+                    ON split_part(r.related_id,'_',1) = t.p1
+                AND split_part(r.related_id,'_',2) = t.p2
+                AND split_part(r.related_id,'_',3) = t.p3
+                AND split_part(r.related_id,'_',4) = t.p4
+                AND split_part(r.related_id,'_',5) = t.p5
+                GROUP BY t.related_id
+                )
+                SELECT
+                t.related_id,
+                s.merged_details AS details,
+                src.source_id, src.source_type, src.author, src.date_info, src.concept, src.title,
+                t.rt_distance,
+                snt.sentence_id, snt.section_id, snt.text
+                FROM scored t
+                JOIN siblings s ON s.target_id = t.related_id
+                LEFT JOIN related_text_source src ON src.source_id = t.source_id
+                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
+                ORDER BY t.rt_distance;
+            """
         return self.retrieve_by_count(user_query, count, sql_query)
 
     def retrieve(
@@ -456,17 +539,17 @@ class RetrieverBySource(RelatedTextRetriever):
     def filter_results(
         self,
         results: list[SentenceRelatedTexts],
-        sentence_threshold=1,
-        rt_threshold=0.5,
     ) -> list[SentenceRelatedTexts]:
         filtered_results: list[SentenceRelatedTexts] = []
         # we need to delete sentences that have a final score below the threshold
         for sentence in results:
-            if sentence.final_score >= sentence_threshold:
+            if sentence.final_score >= self.sentence_threshold:
                 filtered_results.append(sentence)
         # now for the remaining sentences, filter the related texts with a low contribution
         for sentence in filtered_results:
             sentence.related_texts = [
-                rt for rt in sentence.related_texts if rt.similarity >= rt_threshold
+                rt
+                for rt in sentence.related_texts
+                if rt.similarity >= self.rt_threshold
             ]
         return filtered_results
