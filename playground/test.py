@@ -148,7 +148,7 @@ class RelatedText:
     def to_dict(self) -> dict[str, str | list[dict[str, str | int]]]:
         return {
             "related_text_id": self.related_text_id,
-            # "source": self.source.to_dict(), # omit source for now
+            "source_id": self.source.source_id,
             "details": self.details,
             "similarity": self.similarity,
         }

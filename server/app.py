@@ -1,9 +1,15 @@
 import flask
+from flask_cors import CORS
 from playground.test import RetrieverBySource, SentenceRelatedTexts
 import json
 
 app = flask.Flask(__name__)
-
+CORS(
+    app,
+    resources={r"/*": {"origins": ["http://localhost:3000"]}},
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"],
+)
 retriever = RetrieverBySource()
 DEFAULT_COUNT = 50
 
@@ -26,17 +32,16 @@ def query():
                },
             },
             ...
-        ]
+        ],
         "related_texts": [
             {
-                "source_id": [ # for this source, we have the following related texts
-                    {
-                        "related_text_id": "string",
-                        "details": "string",
-                        "similarity": float # can be ignored
-                    },
-                    ...
-                ]
+                {
+                    "related_text_id": "string",
+                    "details": "string",
+                    "similarity": float, # can be ignored
+                    "source_id": "string"
+                },
+                ...
             },
             ...
         ]
