@@ -113,11 +113,11 @@ class Sentence:
             "sentence_id": self.sentence_id,
             "section_id": self.section_id,
             "text": self.text,
-            # "similarity": self.similarity,
+            "similarity": self.similarity,
         }
 
 
-@dataclass
+@dataclass(eq=True)
 class Source:
     source_id: str
     source_type: str
@@ -179,6 +179,29 @@ class SentenceRelatedTexts:
 
         result = {"sentence": self.sentence.to_dict(), "related_texts": source_list}
         result["sentence"]["similarity"] = self.final_score
+        return result
+
+
+@dataclass(eq=True)
+class SentenceWithRelations(Sentence):
+    related_text_ids: list[str] = field(default_factory=list, compare=False)
+
+    def to_dict(self):
+        result = super().to_dict()
+        result["related_text_ids"] = self.related_text_ids
+        return result
+
+
+@dataclass(eq=True)
+class Result:
+    sentences: list[SentenceWithRelations]
+    related_texts: list[RelatedText]
+
+    def to_dict(self):
+        result = {
+            "sentences": [s.to_dict() for s in self.sentences],
+            "related_texts": [rt.to_dict() for rt in self.related_texts],
+        }
         return result
 
 
@@ -355,11 +378,18 @@ class RetrieverBySource(RelatedTextRetriever):
         self.source_ids, self.sources = self.get_source_ids()
         self.base = kwargs.get("base", 0.3)
         self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
-        self.rt_threshold = kwargs.get("rt_threshold", 0.5)
+        self.rt_threshold = kwargs.get("rt_threshold", 0.4)
 
     def get_source_ids(self) -> tuple[list[str], list[dict]]:
         sql_query = """
-        SELECT source_id, source_type, author, date_info, concept, title FROM related_text_source
+            WITH source_ids AS (
+                SELECT source_id
+                FROM related_text
+                GROUP BY source_id
+                HAVING COUNT(*) > 0
+            )
+            SELECT * FROM related_text_source
+            WHERE source_id IN (SELECT source_id FROM source_ids)
         """
         execute_query(self.cursor, self.conn, sql_query)
         sources = [Source(*row).to_dict() for row in self.cursor.fetchall()]
@@ -432,9 +462,7 @@ class RetrieverBySource(RelatedTextRetriever):
             """
         return self.retrieve_by_count(user_query, count, sql_query)
 
-    def retrieve(
-        self, user_query: str, source_ids: list[str], count: int
-    ) -> list[SentenceRelatedTexts]:
+    def retrieve(self, user_query: str, source_ids: list[str], count: int) -> Result:
         """
         Does the following:
         1. For each source, retrieves the top `count` candidate related text chunks
@@ -444,6 +472,7 @@ class RetrieverBySource(RelatedTextRetriever):
         5. Finally, a final score is calculated based on the entire sources
         6. we cut-off any sentences that seem to be below a threshold
         7. for each sentence's related text, we cut-off any related text that is also below a threshold
+        8. Postprocess to get a Result Object and return It
         """
         results: list[SentenceRelatedTexts] = []
         for source_id in source_ids:
@@ -458,7 +487,49 @@ class RetrieverBySource(RelatedTextRetriever):
         # merge each sentence so that all its related texts are grouped
         results = self.merge_sentences(results)
         results = self.filter_results(results)
-        return results
+        return self.finalize(results)
+
+    def finalize(self, results: list[SentenceRelatedTexts]) -> Result:
+        """
+        Finalizes the results by returning each sentence and related text alone once
+        """
+        unique_sentences: dict[tuple[int, int], Sentence] = {}
+        unique_related_texts: dict[str, RelatedText] = {}
+        related_texts_per_sentence: dict[tuple[int, int], list[str]] = {}
+        for result in results:
+            sentence = result.sentence
+            sentence.similarity = result.final_score
+            key = (sentence.sentence_id, sentence.section_id)
+            unique_sentences[key] = sentence
+            if key not in related_texts_per_sentence:
+                related_texts_per_sentence[key] = []
+            related_texts = result.related_texts
+            for rt in related_texts:
+                related_texts_per_sentence[key].append(rt.related_text_id)
+                unique_related_texts[rt.related_text_id] = rt
+        sentences_with_relations: list[SentenceWithRelations] = []
+        for key, sentence in unique_sentences.items():
+            related_texts = related_texts_per_sentence[key]
+            related_texts.sort()
+            sentences_with_relations.append(
+                SentenceWithRelations(
+                    sentence_id=sentence.sentence_id,
+                    section_id=sentence.section_id,
+                    text=sentence.text,
+                    similarity=sentence.similarity,
+                    related_text_ids=related_texts,
+                )
+            )
+        # sort sentences by section id then sentence id
+        sentences_with_relations.sort(key=lambda x: (x.section_id, x.sentence_id))
+        all_related_texts: set[str] = set()
+        # sort related texts by order they appear in for the sentences
+        for sentence in sentences_with_relations:
+            for related_text_id in sentence.related_text_ids:
+                all_related_texts.add(related_text_id)
+        related_texts = [unique_related_texts[rt_id] for rt_id in all_related_texts]
+        result = Result(sentences=sentences_with_relations, related_texts=related_texts)
+        return result
 
     def related_texts_to_sentences(
         self, related_texts: list[RelatedText]
@@ -511,7 +582,7 @@ class RetrieverBySource(RelatedTextRetriever):
         return score
 
     def get_score(self, vals: list[float]) -> float:
-        return sum(val * (self.base**i) for i, val in enumerate(vals))
+        return sum(val * (self.base**i) for i, val in enumerate(sorted(vals)))
 
     def merge_sentences(
         self, sentence_related_texts: list[SentenceRelatedTexts]
@@ -540,6 +611,30 @@ class RetrieverBySource(RelatedTextRetriever):
         self,
         results: list[SentenceRelatedTexts],
     ) -> list[SentenceRelatedTexts]:
+        # for significant related_texts that have same content without the $$ signed, we need to merge them, preserving the $$ signs, and mix their scores
+        for sentence in results:
+            rt_by_prefix: dict[str, list[RelatedText]] = {}
+            for rt in sentence.related_texts:
+                prefix = rt.related_text_id.rsplit("_", 1)[0]
+                if prefix not in rt_by_prefix:
+                    rt_by_prefix[prefix] = [rt]
+                else:
+                    rt_by_prefix[prefix].append(rt)
+            merged_rts: list[RelatedText] = []
+            for prefix, rts in rt_by_prefix.items():
+                # sort by position of the first $$
+                rts.sort(key=lambda x: x.related_text_id.find("$$"))
+                strings = [rt.details for rt in rts]
+                rt = RelatedText(
+                    related_text_id=prefix,
+                    related_sentences=rts[0].related_sentences,
+                    source=rts[0].source,
+                    details=merge_details(strings),
+                    similarity=self.get_score([rt.similarity for rt in rts]),
+                )
+                merged_rts.append(rt)
+            sentence.related_texts = merged_rts
+
         filtered_results: list[SentenceRelatedTexts] = []
         # we need to delete sentences that have a final score below the threshold
         for sentence in results:
@@ -552,4 +647,30 @@ class RetrieverBySource(RelatedTextRetriever):
                 for rt in sentence.related_texts
                 if rt.similarity >= self.rt_threshold
             ]
+
         return filtered_results
+
+
+def merge_details(strings: list[str]) -> str:
+    """
+    This function merges a list of such strings into one
+    We know the $$ranges$$ are non intersecting and ordered, and each string has exactly one range
+    I $$am string 1$$ and have dollars
+    I am string 1 and $$have dollars$$
+
+    """
+    results: list[str] = []
+    i = 0  # index of string
+    last_index_reached = 0  # position where we found the last $ sign in the last string
+    while i < len(strings):
+        string = strings[i]
+        # subtract 4 as the position was increased
+        current_index = string.rfind(
+            "$$"
+        )  # returns the position of the first $ in the $$ at the back
+        results.append(string[last_index_reached : current_index + 2])
+        last_index_reached = current_index - 2  # - 2 because of the first $$
+        i += 1
+    # add anything after the last $$
+    results.append(strings[-1][last_index_reached + 4 :])
+    return "".join(results)
