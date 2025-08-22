@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 // import { sendMessageToChat } from '../services/api';
-import { Message, ChatResponse } from '../util/types';
+import { Message, ChatResponse, Source } from '../util/types';
 import { v4 as uuidv4 } from 'uuid';
+import '../styles.css';
 
-const ChatInterface = () => {
+interface ChatInterfaceProps {
+    selectedSourceId: string;
+    sendMessageFunction: (query: string, sources: string[]) => Promise<ChatResponse>;
+}
+
+const ChatInterface = ({ selectedSourceId, sendMessageFunction }: ChatInterfaceProps) => {
     const [messages, setMessages] = useState<Message[]>([]);    // chat history
     const [inputMessage, setInputMessage] = useState<string>('');    // user input
     const [loading, setLoading] = useState<boolean>(false);    // loading indicator
@@ -31,13 +37,11 @@ const ChatInterface = () => {
         setError(null);
 
         try {
-            // API Call
-            // const response: ChatResponse = await API_CALL(inputMessage);
-            // TODO: do the proper api call, temp response for now
-            const response: ChatResponse = {
-                answer: "This is a placeholder response",
-                context_used: []
-            }
+            const response = await sendMessageFunction(
+                inputMessage,
+                selectedSourceId ? [selectedSourceId] : []
+            );
+
             const botMessage: Message = {
                 id: uuidv4(),
                 sender: 'bot',
@@ -45,18 +49,16 @@ const ChatInterface = () => {
                 timestamp: new Date().toISOString(),
             };
             setMessages((prevMessages) => [...prevMessages, botMessage]);
-
         } catch (err: any) {
             console.error('Error sending message:', err);
-            setError(err.response?.data?.detail || 'Failed to get a response.');
             const errorMessage: Message = {
                 id: uuidv4(),
                 sender: 'bot',
-                text: `Error: ${err.response?.data?.detail || 'Failed to get a response.'}`,
+                text: `Error: ${err.message || 'Failed to get a response.'}`,
                 timestamp: new Date().toISOString(),
             };
             setMessages((prevMessages) => [...prevMessages, errorMessage]);
-        
+            setError(err.message || 'Failed to get a response.');
         } finally {
             setLoading(false);
         }

@@ -15,3 +15,13 @@ export interface ChatResponse {
     answer: string;
     context_used: string[];
 }
+
+
+export interface Source {
+    author: string;
+    concept: string;
+    date_info: string;
+    source_id: string;
+    source_type: string;
+    title: string;
+}

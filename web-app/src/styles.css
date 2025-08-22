@@ -17,7 +17,7 @@ body {
 .App-header {
     display: flex;
     flex-direction: row;
-    justify-content: center;
+    justify-content:space-between;
     background: radial-gradient(circle at top left, #2489ae, #0b2d39);
     padding: 20px;
     margin-bottom: 10px;
@@ -69,13 +69,18 @@ body {
     min-width: 20rem;
 }
 
-.chat-section h2 {
-    color: #00bb76;
-    margin-top: 0;
-    font-size: 1.2em;
+.source-selector {
+    margin-top: 1rem;
 }
 
-
+.source-selector select {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    cursor: pointer;
+}
 
 
 /* ChatInterface Styling */
@@ -222,4 +227,36 @@ body {
     .sidebar {
         border-bottom: 1px solid #e5e5e5;
     }
+}
+
+.mode-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    background-color: #f0f0f0;
+    border-radius: 25px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.mode-toggle button {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    border-radius: 0;
+    background-color: #c2c2c2;
+    width: 100%;
+    color: #333;
+}
+
+.mode-toggle button.selected {
+    background-color: #2596be;
+    color: #fff;
+}
+
+.mode-toggle button:not(.selected):hover {
+    background-color: #d0d0d0;
 }
