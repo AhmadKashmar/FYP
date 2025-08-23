@@ -49,3 +49,16 @@ At this point your data (and embeddings) are in the Postgres container.
 Notes:
 
 -   when you stop and start docker, make sure postgres is running.
+
+# Web App Setup
+
+1. Go to the directory `web-app` and install node requirements, then build
+
+    ```bash
+    npm install; npm run build;
+    ```
+
+2. Start the server, and load the web app
+    ```bash
+    python -m server.app; cd web-app/; npx serve -s build;
+    ```

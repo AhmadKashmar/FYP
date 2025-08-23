@@ -1,3 +1,4 @@
+from playground.utils import TextCleaner
 import os
 import psycopg2
 from pgvector.psycopg2 import register_vector
@@ -14,7 +15,7 @@ register_adapter(np.int64, lambda v: AsIs(int(v)))
 register_adapter(np.int32, lambda v: AsIs(int(v)))
 register_adapter(np.float64, lambda v: AsIs(float(v)))
 register_adapter(np.bool_, lambda v: AsIs(bool(v)))
-
+cleaner = TextCleaner()
 
 load_dotenv()
 def setup_logger(app_name="logs"):
@@ -97,6 +98,7 @@ def execute_query(
 
 def embed(text: str) -> list[float]:
     logger.info("Embedding text")
+    text = cleaner.clean(text)
     vec = transformer.encode(text, normalize_embeddings=True).tolist()
     return Vector(vec)
 

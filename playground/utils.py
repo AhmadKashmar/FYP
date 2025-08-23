@@ -46,4 +46,4 @@ class TextCleaner:
             text = text.strip()
             text = TextCleaner.replaceMultipleSpaces(text)
         text = normalize_unicode(text)
-        return text
+        return text.strip()
