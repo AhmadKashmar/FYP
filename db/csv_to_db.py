@@ -14,7 +14,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 from tqdm import tqdm
-from playground.utils import TextCleaner
+# from playground.utils import TextCleaner # no need to clean text here
 import re
 
 
@@ -595,7 +595,7 @@ tv_mapping = {
     },
 }
 
-cleaner = TextCleaner()
+# cleaner = TextCleaner()
 
 SENTENCE_BREAK = re.compile(
     r"""(?<=[.!؟!?…:؛])(?![^()\[\]{}]*[)\]\}])\s+""", re.VERBOSE
@@ -650,7 +650,7 @@ def to_sentences(text: str) -> list[str]:
     text = re.sub(r"\[\s*(?:<>\s*)?", "[", text)
     text = re.sub(r"(?:(?:\s*<>\s*)|\s+)\]", "]", text)
     text = re.sub(r"\s+\.", ".", text)
-    text = cleaner.cleanText(text)
+    # text = cleaner.cleanText(text)
 
     min_paragraph_tokens = 150
     min_sentence_tokens = 30
@@ -665,6 +665,7 @@ def to_sentences(text: str) -> list[str]:
         sentences = enforce_lower_bound(sentences, min_sentence_tokens)
         sentences = enforce_upper_bound(sentences, max_sentence_tokens)
         result.extend([s for s in sentences if s])
+        result[-1][-1] += "\n"  # add a newline to the end of the paragraph
 
     result = enforce_lower_bound(result, min_sentence_tokens)
 
@@ -695,7 +696,8 @@ def add_sentences(cursor: psycopg2.extensions.cursor):
                 row["aya"],
                 row["sura"],
                 None,
-                cleaner.cleanText(row["text"]),
+                # cleaner.cleanText(row["text"]),
+                row["text"],
             )
         )
     execute_values(cursor, query, values)
