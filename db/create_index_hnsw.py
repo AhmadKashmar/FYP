@@ -14,7 +14,7 @@ def main():
     db_host = os.getenv("DB_HOST")
     db_port = os.getenv("DB_PORT")
     RAM_LIMIT = os.getenv("RAM_LIMIT", "14GB")
-
+    MIN_ROW_COUNT = 20000
     # connect to the database
     connection = psycopg2.connect(
         dbname=db_name,
@@ -28,13 +28,20 @@ def main():
 
     cursor = connection.cursor()
 
-    cursor.execute("ALTER SYSTEM SET maintenance_work_mem = %s;", (RAM_LIMIT,))
-    cursor.execute("SELECT pg_reload_conf();")
-
+    cursor.execute("SET maintenance_work_mem = %s;", (RAM_LIMIT,))
     cursor.execute(
-        "SELECT DISTINCT source_id FROM Related_text WHERE source_id IS NOT NULL;"
+        """
+        SELECT source_id, COUNT(*) AS cnt
+        FROM related_text
+        GROUP BY source_id
+        """
     )
-    for (source_id,) in cursor.fetchall():
+    for source_id, count in cursor.fetchall():
+        if count < MIN_ROW_COUNT:
+            print(
+                f"Skipping source_id {source_id} with count {count} < {MIN_ROW_COUNT}"
+            )
+            continue
         print("Creating index for source_id:", source_id)
         idx_name = f"related_text_embed_hnsw_cos_src_{source_id}"
         sql = f"""
@@ -48,7 +55,9 @@ def main():
     with open("db/index.sql", "r", encoding="utf-8") as f:
         sql = f.read()
     for query in [s.strip() for s in sql.split(";") if s.strip()]:
+        print("Running query:\n", query)
         cursor.execute(query + ";")
+        print("-----------------------------------------------")
     cursor.close()
     connection.close()
 

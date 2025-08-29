@@ -21,7 +21,7 @@
     docker run --name basic-postgres -e POSTGRES_USER="$env:DB_USER" -e POSTGRES_PASSWORD="$env:DB_PASSWORD" -e POSTGRES_DB="$env:DB_NAME"  -e PGDATA="/var/lib/postgresql/data/pgdata" -v "$($env:HOST_DATA_PATH)/data/pgdata:/var/lib/postgresql/data" -p "$($env:DB_PORT):5432" -d -it ankane/pgvector:latest
     ```
 
-4. Load your CSV data into the database (you might want to edit the column names in db/csv_to_db.py to fit your data, or create a new script to migrate it):
+4. Load your CSV data into the database (you might want to edit the column names in `db/csv_to_db.py` to fit your data, or create a new script to migrate it):
 
     ```bash
     python db/csv_to_db.py
@@ -39,8 +39,26 @@
     python db/update_tables.py
     ```
 
+7. Index the database by running the following (it will take a few minutes):
+    ```bash
+    python db/create_index_hnsw.py
+    ```
+
 At this point your data (and embeddings) are in the Postgres container.
 
 Notes:
 
 -   when you stop and start docker, make sure postgres is running.
+
+# Web App Setup
+
+1. Go to the directory `web-app` and install node requirements, then build
+
+    ```bash
+    npm install; npm run build;
+    ```
+
+2. Start the server, and load the web app
+    ```bash
+    python -m server.app; cd web-app/; npx serve -s build;
+    ```

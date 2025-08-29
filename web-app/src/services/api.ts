@@ -1,51 +1,81 @@
-import { Source, ChatResponse } from '../util/types';
+import type {
+	QueryRequest,
+	Sentence,
+	RelatedText,
+	Source,
+	ChatResponse,
+} from "../util/types";
+import { sentencesAndRelatedTextsToChatResponse } from "../util/helpers";
 
-// Mock sources data 
-const mockSources: Source[] = [
-    { author: 'المحلي و السيوطي', concept: 'ميسر', date_info: 'ت 864 هـ', source_id: '1_8', source_type: 'أمهات التفاسير', title: 'تفسير الجلالين' },
-    { author: 'الطبري', concept: 'بالمأثور', date_info: 'ت 310 هـ', source_id: '1_1', source_type: 'أمهات التفاسير', title: 'جامع البيان في تفسير القرآن' },
-    { author: 'الزمخشري', concept: 'بياني', date_info: 'ت 538 هـ', source_id: '1_2', source_type: 'أمهات التفاسير', title: 'الكشاف' },
-];
+const BASE_URL =
+	(typeof process !== "undefined" &&
+		(process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL)) ||
+	"http://localhost:5000";
 
-const mockChatResponse: ChatResponse = {
-    answer: "هذا هو الجواب على سؤالك. يمكن أن يحتوي على تنسيق **Markdown**.",
-    context_used: [], // temporarily
-};
+let SOURCES: Array<Source> = [];
 
-// Get sources endpoint Mock
-export const getSourcesMock = (): Promise<Source[]> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(mockSources);
-        }, 500); // Simulate network delay
-    });
-};
+export async function QueryWithoutInference(body: QueryRequest): Promise<ChatResponse> {
+	const url = `${BASE_URL}/query-without-inference`;
+	const res = await fetch(url, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		},
+		body: JSON.stringify(body),
+	});
+	if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+	const { sentences, related_texts } = await res.json();
+	const sentencesTyped = sentences as Array<Sentence>;
+	const relatedTextsTyped = related_texts as Array<RelatedText>;
 
+	return sentencesAndRelatedTextsToChatResponse(
+		sentencesTyped,
+		relatedTextsTyped,
+		SOURCES
+	);
+}
 
-// Mocks the API call to send a user message to the "with inference" API.
-export const sendMessageWithInference = (query: string, sources: string[]): Promise<ChatResponse> => {
-    console.log(`Mock "with inference" API call received: query="${query}", sources=${sources}`);
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const mockChatResponse: ChatResponse = {
-                answer: "This is a response generated with **inference**. The context has been used to provide a more detailed and nuanced answer.",
-                context_used: [],
-            };
-            resolve(mockChatResponse);
-        }, 1000); // Simulate network delay
-    });
-};
+export async function QueryWithInference(body: QueryRequest): Promise<ChatResponse> {
+	const url = `${BASE_URL}/query-with-inference`;
+	const res = await fetch(url, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		},
+		body: JSON.stringify(body),
+	});
+	if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
-// Mocks the API call to send a user message to the "without inference" API.
-export const sendMessageWithoutInference = (query: string, sources: string[]): Promise<ChatResponse> => {
-    console.log(`Mock "without inference" API call received: query="${query}", sources=${sources}`);
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const mockChatResponse: ChatResponse = {
-                answer: "This is a response generated **without inference**. It is a general response that does not use any specific context from the sources.",
-                context_used: [],
-            };
-            resolve(mockChatResponse);
-        }, 1000); // Simulate network delay
-    });
-};
+	const data = await res.json();
+
+	return { answer: data.response } as ChatResponse;
+}
+
+export async function getSourcesAPI(): Promise<Source[]> {
+	const url = `${BASE_URL}/sources`;
+	const res = await fetch(url, {
+		method: "GET",
+		headers: {
+			"Content-Type": "application/json",
+			Accept: "application/json",
+		},
+	});
+	if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+	const { sources: json_sources } = await res.json();
+	const sources = json_sources.map(
+		(s: Source) =>
+			({
+				source_id: s.source_id || "",
+				author: s.author || "",
+				concept: s.concept || "",
+				date_info: s.date_info || "",
+				source_type: s.source_type || "",
+				title: s.title || "",
+			} as Source)
+	);
+	SOURCES = sources;
+	return sources;
+}
