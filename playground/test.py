@@ -98,7 +98,7 @@ def execute_query(
 
 def embed(text: str) -> list[float]:
     logger.info("Embedding text")
-    text = cleaner.clean(text)
+    text = cleaner.cleanText(text)
     vec = transformer.encode(text, normalize_embeddings=True).tolist()
     return Vector(vec)
 
