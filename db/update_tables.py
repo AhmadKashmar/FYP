@@ -37,7 +37,7 @@ class Transformer:
 
     @staticmethod
     def embeddings(text: str) -> np.ndarray:
-        text = cleaner.clean(text)
+        text = cleaner.cleanText(text)
         return Transformer.transformer.encode(
             text,
             # task="retrieval.passage",
@@ -56,7 +56,7 @@ class JinaAPIEmbedder:
 
     @staticmethod
     def embeddings(texts: list[str]) -> list[list[float]]:
-        texts = [cleaner.clean(text) for text in texts]
+        texts = [cleaner.cleanText(text) for text in texts]
         try:
             payload = {
                 "model": "jina-embeddings-v3",

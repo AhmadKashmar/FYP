@@ -220,7 +220,7 @@ function escapeHtml(s: string): string {
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&#39;")
-		.replace(/\r?\n/g, "<br>");
+		.replace(/\r?\n/g, "<br><br>");
 }
 
 function renderImportant(text: string): string {
