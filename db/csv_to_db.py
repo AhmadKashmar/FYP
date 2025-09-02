@@ -652,9 +652,9 @@ def to_sentences(text: str) -> list[str]:
     text = re.sub(r"\s+\.", ".", text)
     # text = cleaner.cleanText(text)
 
-    min_paragraph_tokens = 150
-    min_sentence_tokens = 30
-    max_sentence_tokens = 40
+    min_paragraph_tokens = 100
+    min_sentence_tokens = 20
+    max_sentence_tokens = 30
 
     paragraphs = text.split("<>")
     paragraphs = enforce_lower_bound(paragraphs, min_paragraph_tokens)
@@ -665,7 +665,8 @@ def to_sentences(text: str) -> list[str]:
         sentences = enforce_lower_bound(sentences, min_sentence_tokens)
         sentences = enforce_upper_bound(sentences, max_sentence_tokens)
         result.extend([s for s in sentences if s])
-        result[-1][-1] += "\n"  # add a newline to the end of the paragraph
+        # result[-1][-1] += "\n"  this line caused an error because result[-1] is the string while result[-1][-1] is the last character of that string
+        result[-1] += "\n"  # add a newline to the end of the paragraph
 
     result = enforce_lower_bound(result, min_sentence_tokens)
 

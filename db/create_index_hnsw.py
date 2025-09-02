@@ -13,7 +13,7 @@ def main():
     db_password = os.getenv("DB_PASSWORD")
     db_host = os.getenv("DB_HOST")
     db_port = os.getenv("DB_PORT")
-    RAM_LIMIT = os.getenv("RAM_LIMIT", "14GB")
+    RAM_LIMIT = os.getenv("RAM_LIMIT", "8GB")
     MIN_ROW_COUNT = 20000
     # connect to the database
     connection = psycopg2.connect(

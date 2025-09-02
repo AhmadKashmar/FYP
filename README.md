@@ -11,7 +11,7 @@
     DB_PORT=your_db_port
     HOST_DATA_PATH=//c/Users/ahmad/Desktop:
     DATA_DIR=directory/containing/csv/files
-    VECTOR_DIM ="1024" # dimensions of the embedding vectors
+    VECTOR_DIM ="768" # dimensions of the embedding vectors (or 1024 if you're going with Jina v3 embedding model)
     RAM_LIMIT="14GB" # how much ram usable while indexing database (default 64MB limit makes it impossible)
     ```
 
@@ -36,7 +36,7 @@
 6. Compute and store embeddings (can be stopped with Ctrl+C, picks up where it left off):
 
     ```bash
-    python db/update_tables.py
+    python -m db.update_tables
     ```
 
 7. Index the database by running the following (it will take a few minutes):
