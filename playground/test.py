@@ -378,8 +378,9 @@ class RetrieverBySource(RelatedTextRetriever):
         self.conn = conn
         self.cursor = conn.cursor()
         self.source_ids, self.sources = self.get_source_ids()
+        self.source_by_id = {source.get("source_id"): source for source in self.sources}
         self.base = kwargs.get("base", 0.3)
-        self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
+        self.sentence_threshold = kwargs.get("sentence_threshold", 0.5)
         self.rt_threshold = kwargs.get("rt_threshold", 0.4)
 
     def get_source_ids(self) -> tuple[list[str], list[dict]]:

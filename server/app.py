@@ -2,6 +2,14 @@ import flask
 from flask_cors import CORS
 from playground.test import RetrieverBySource, SentenceRelatedTexts
 import json
+from playground.utils import Gemini
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+api_keys = os.getenv("GEMINI_API_KEY").split("|||||")
+
+inference = Gemini(api_keys)
 
 app = flask.Flask(__name__)
 CORS(
@@ -11,7 +19,7 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
 )
 retriever = RetrieverBySource()
-DEFAULT_COUNT = 50
+DEFAULT_COUNT = 20
 
 @app.route("/query-without-inference", methods=["POST"])
 def query():
@@ -89,9 +97,11 @@ def query_with_inference():
             pass
         raise e
     response = results.to_dict()
-    # currently a placeholder till we set up LLM
-    dump = json.dumps({"response": str(response)}, ensure_ascii=False, indent=4)
-    return dump, 200
+    for result in response.get("results", []):
+        result["source"] = retriever.source_by_id.get(result["source_id"])
+        del result["source_id"]
+    response = inference.ask(query, json.dumps(response, ensure_ascii=False, indent=2))
+    return response, 200
 
 
 @app.route("/sources", methods=["GET"])
