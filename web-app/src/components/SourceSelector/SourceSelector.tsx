@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Source } from "../util/types";
+import { Source } from "../../util/types";
+import "./source.css";
 
 interface SourceSelectorProps {
 	sources: Source[];

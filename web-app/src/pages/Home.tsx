@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Source } from "../util/types";
-import SourceSelector from "../components/SourceSelector";
-import TwoSectorChat from "../components/TwoSectorChat";
+import SourceSelector from "../components/SourceSelector/SourceSelector";
+import TwoSectorChat from "../components/TwoSectorChat/TwoSectorChat";
 import { getSourcesAPI } from "../services/api";
 import "../styles.css";
 
@@ -42,10 +42,10 @@ export const Home = () => {
 
 	return (
 		<div className="App">
-			<header className="App-header">
-				<img src={"/assets/logo.png"} alt="logo" />
+			<div className="header-container">
 				<h1>البحث المعنوي في تفاسير القرآن</h1>
-			</header>
+				<div className="header-pattern"></div>
+			</div>
 			<main className="App-main">
 				<div className="sidebar">
 					<h2>المصادر</h2>

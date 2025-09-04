@@ -4,7 +4,7 @@ import psycopg2
 import psycopg2.extras
 from pgvector.psycopg2 import register_vector
 from dotenv import load_dotenv
-import sentence_transformers
+from sentence_transformers import SentenceTransformer
 import torch
 import numpy as np
 import warnings
@@ -21,68 +21,58 @@ BATCH_SIZE = 2000
 
 
 class Transformer:
-    transformer = None
+    model = None
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     @staticmethod
     def load(model_name: str = model_name):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Loading model {model_name} on {device}...")
-        warnings.filterwarnings("ignore")
-        Transformer.transformer = sentence_transformers.SentenceTransformer(
-            model_name,
-            device=device,
-            trust_remote_code=True,
-        )
-        warnings.filterwarnings("default")
+        print(f"Loading model {model_name} on {Transformer.device}...")
+        Transformer.model = SentenceTransformer(model_name, device=Transformer.device)
 
     @staticmethod
-    def embeddings(text: str) -> np.ndarray:
-        text = cleaner.cleanText(text)
-        return Transformer.transformer.encode(
-            text,
-            # task="retrieval.passage",
-            normalize_embeddings=True,
-        )
+    def embeddings(texts: list[str]) -> np.ndarray:
+        # The SentenceTransformer model handles tokenization and pooling internally
+        return Transformer.model.encode(texts)
 
 
-class JinaAPIEmbedder:
-    api_url = "https://api.jina.ai/v1/embeddings"
-    idx = 0
-    JINA_API_KEYS = os.getenv("JINA_API_KEY").split(",")
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {JINA_API_KEYS[idx]}",
-    }
+# class JinaAPIEmbedder:
+#     api_url = "https://api.jina.ai/v1/embeddings"
+#     idx = 0
+#     JINA_API_KEYS = os.getenv("JINA_API_KEY").split(",")
+#     headers = {
+#         "Content-Type": "application/json",
+#         "Authorization": f"Bearer {JINA_API_KEYS[idx]}",
+#     }
 
-    @staticmethod
-    def embeddings(texts: list[str]) -> list[list[float]]:
-        texts = [cleaner.cleanText(text) for text in texts]
-        try:
-            payload = {
-                "model": "jina-embeddings-v3",
-                "task": "retrieval.passage",
-                "input": texts,
-            }
-            resp = requests.post(
-                JinaAPIEmbedder.api_url,
-                headers=JinaAPIEmbedder.headers,
-                json=payload,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-        except Exception as e:
-            print(
-                f"API key {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]} is exhausted, switching..."
-            )
-            JinaAPIEmbedder.idx += 1
-            if JinaAPIEmbedder.idx == len(JinaAPIEmbedder.JINA_API_KEYS):
-                print(e)
-                raise RuntimeError("All API keys exhausted")
-            JinaAPIEmbedder.headers["Authorization"] = (
-                f"Bearer {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]}"
-            )
-            return JinaAPIEmbedder.embeddings(texts)
-        return [item["embedding"] for item in body["data"]]
+#     @staticmethod
+#     def embeddings(texts: list[str]) -> list[list[float]]:
+#         texts = [cleaner.clean(text) for text in texts]
+#         try:
+#             payload = {
+#                 "model": "jina-embeddings-v3",
+#                 "task": "retrieval.passage",
+#                 "input": texts,
+#             }
+#             resp = requests.post(
+#                 JinaAPIEmbedder.api_url,
+#                 headers=JinaAPIEmbedder.headers,
+#                 json=payload,
+#             )
+#             resp.raise_for_status()
+#             body = resp.json()
+#         except Exception as e:
+#             print(
+#                 f"API key {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]} is exhausted, switching..."
+#             )
+#             JinaAPIEmbedder.idx += 1
+#             if JinaAPIEmbedder.idx == len(JinaAPIEmbedder.JINA_API_KEYS):
+#                 print(e)
+#                 raise RuntimeError("All API keys exhausted")
+#             JinaAPIEmbedder.headers["Authorization"] = (
+#                 f"Bearer {JinaAPIEmbedder.JINA_API_KEYS[JinaAPIEmbedder.idx]}"
+#             )
+#             return JinaAPIEmbedder.embeddings(texts)
+#         return [item["embedding"] for item in body["data"]]
 
 
 def fetch_pending(
@@ -169,7 +159,6 @@ def show_progress(conn: psycopg2.extensions.connection):
 
 
 def main():
-
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
@@ -179,6 +168,7 @@ def main():
     )
     register_vector(conn)
     # show_progress(conn)
+    print("loading model ", model_name, "...")
     Transformer.load(model_name)
 
     try:

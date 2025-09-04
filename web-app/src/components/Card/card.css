@@ -1,0 +1,17 @@
+
+
+.card {
+  color: #e1e1e1;
+  background-color: #2d5b59;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px auto;
+  max-width: 400px;
+  text-align: right;
+  direction: rtl;
+}
+
+.card a {
+  text-decoration: none;
+  color: #d79a6c;
+}

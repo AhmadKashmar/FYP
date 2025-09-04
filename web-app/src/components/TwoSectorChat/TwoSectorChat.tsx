@@ -1,7 +1,8 @@
 import { useState } from "react";
-import ChatInterface from "./ChatInterface";
-import { QueryWithInference, QueryWithoutInference } from "../services/api";
-import { ChatResponse } from "../util/types";
+import ChatInterface from "../ChatInterface/ChatInterface";
+import { QueryWithInference, QueryWithoutInference } from "../../services/api";
+import { ChatResponse } from "../../util/types";
+import "./toggle-chat.css";
 
 interface TwoSectorChatProps {
 	selectedSourceId: string;
@@ -13,27 +14,28 @@ const TwoSectorChat = ({ selectedSourceId }: TwoSectorChatProps) => {
 	const sendMessageFn = mode === "with" ? QueryWithInference : QueryWithoutInference;
 
 	return (
-		<div className="flex flex-col m-4 p-4 gap-4">
+		<>
 			<div className="mode-toggle">
 				<button
 					className={mode === "with" ? "selected" : ""}
 					onClick={() => setMode("with")}
 				>
-					مع الاستدلال
+					الرد الذكي
+					<img src={"../../assets/llm-powered.png"}/>
 				</button>
 				<button
 					className={mode === "without" ? "selected" : ""}
 					onClick={() => setMode("without")}
 				>
-					بدون استدلال
+					البيانات الأصلية
+					<img src={"../../assets/doc.png"}/>
 				</button>
 			</div>
 
 			<ChatInterface
 				selectedSourceId={selectedSourceId}
 				sendMessageFunction={sendMessageFn}
-			/>
-		</div>
+			/></>
 	);
 };
 

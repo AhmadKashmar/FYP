@@ -1,0 +1,56 @@
+.App-header {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 10px;
+	color: white;
+}
+
+.App-header img {
+	height: 9rem;
+	width: 9rem;
+	margin-right: 10px;
+}
+
+.App-header nav {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+	flex-grow: 1;
+    justify-content: center;
+	border-bottom: #2d5b59 solid;
+	padding-bottom: 30px;
+}
+
+.App-header button {
+    background-color: #2d5b59;
+    color: white;
+    border: 2px solid #2d5b59;
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	margin: 2px;
+}
+
+.App-header button:hover,
+.App-header button:focus {
+    background-color: #1f4a49;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+	color: white;
+	border: 0;
+}
+
+.App-header nav button {
+    background-color: transparent;
+    color: #2d5b59;
+}
+.App-header nav button:hover {
+    background-color: #2d5b59;
+    color: white;
+}

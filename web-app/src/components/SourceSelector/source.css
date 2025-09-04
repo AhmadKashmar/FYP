@@ -1,0 +1,22 @@
+.source-selector select {
+    padding-left: 1rem;
+    transition: all 0.3s ease;
+    width: 100%;
+    padding: 0.5rem;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid #ccc;
+    cursor: pointer;
+    color: #ccc;
+}
+
+.source-selector select:focus {
+    outline: none;
+}
+
+.source-selector option {
+    background-color: #2b322ed6;
+    color: white;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
