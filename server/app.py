@@ -101,6 +101,7 @@ def query_with_inference():
         result["source"] = retriever.source_by_id.get(result["source_id"])
         del result["source_id"]
     response = inference.ask(query, json.dumps(response, ensure_ascii=False, indent=2))
+    response = {"response": str(response)}
     return response, 200
 
 

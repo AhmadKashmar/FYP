@@ -13,6 +13,7 @@
     DATA_DIR=directory/containing/csv/files
     VECTOR_DIM ="768" # dimensions of the embedding vectors (or 1024 if you're going with Jina v3 embedding model)
     RAM_LIMIT="14GB" # how much ram usable while indexing database (default 64MB limit makes it impossible)
+    # Check `.example.env` for full set
     ```
 
 3. Create a postgres container with the following command:
