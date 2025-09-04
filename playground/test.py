@@ -381,6 +381,7 @@ class RetrieverBySource(RelatedTextRetriever):
         self.base = kwargs.get("base", 0.3)
         self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
         self.rt_threshold = kwargs.get("rt_threshold", 0.4)
+        self.source_by_id = {source.get("source_id"): source for source in self.sources}
 
     def get_source_ids(self) -> tuple[list[str], list[dict]]:
         sql_query = """
