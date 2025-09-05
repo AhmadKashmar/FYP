@@ -56,7 +56,6 @@ export const Home = () => {
 					/>
 				</div>
 				<div className="chat-section">
-					<h2>تحدث مع المساعد</h2>
 					<TwoSectorChat selectedSourceId={selectedSourceId} />
 				</div>
 			</main>
