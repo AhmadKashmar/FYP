@@ -775,15 +775,15 @@ def process_df(
         related_text_id: str = row.related_text_id
         size: int = row.size
         relationship_rows.extend(
-            [(aya + j, soura, related_text_id) for j in range(size)]
+            [(aya + j, soura, related_text_id.rsplit("_", 1)[0]) for j in range(size)]
         )
 
     execute_values(
         cursor,
         """
-        INSERT INTO relationship (sentence_id, section_id, related_text_id)
+        INSERT INTO relationship (sentence_id, section_id, related_text_id_prefix)
         VALUES %s
-        ON CONFLICT (sentence_id, section_id, related_text_id) DO NOTHING
+        ON CONFLICT (sentence_id, section_id, related_text_id_prefix) DO NOTHING
         """,
         relationship_rows,
         page_size=page_size,

@@ -283,15 +283,15 @@ class RelatedTextRetriever:
                 SELECT
                     t.related_id AS target_id,
                     string_agg(
-                    CASE WHEN r.related_id = t.related_id
-                        THEN '$$' || r.details || '$$'
-                        ELSE r.details
-                    END,
-                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                        CASE WHEN r.related_id = t.related_id
+                            THEN '$$' || r.details || '$$'
+                            ELSE r.details
+                        END,
+                        ' ' ORDER BY (split_part(r.related_id,'_',6))::int
                     ) AS merged_details
                 FROM related_text r
                 JOIN scored t
-                    ON split_part(r.related_id,'_',1) = t.p1
+                ON split_part(r.related_id,'_',1) = t.p1
                 AND split_part(r.related_id,'_',2) = t.p2
                 AND split_part(r.related_id,'_',3) = t.p3
                 AND split_part(r.related_id,'_',4) = t.p4
@@ -307,7 +307,8 @@ class RelatedTextRetriever:
                 FROM scored t
                 JOIN siblings s ON s.target_id = t.related_id
                 LEFT JOIN related_text_source src ON src.source_id = t.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN relationship rel
+                ON rel.related_text_id_prefix = concat_ws('_', t.p1, t.p2, t.p3, t.p4, t.p5)
                 LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
                 ORDER BY t.rt_distance;
             """
@@ -392,7 +393,7 @@ class RetrieverBySource(RelatedTextRetriever):
         self.cursor = conn.cursor()
         self.source_ids, self.sources = self.get_source_ids()
         self.base = kwargs.get("base", 0.3)
-        self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
+        self.sentence_threshold = kwargs.get("sentence_threshold", 0.5)
         self.rt_threshold = kwargs.get("rt_threshold", 0.4)
         self.balance_threshold = kwargs.get("balance_threshold", 0.9)
         self.source_by_id = {source.get("source_id"): source for source in self.sources}
@@ -427,7 +428,7 @@ class RetrieverBySource(RelatedTextRetriever):
                 SELECT rt.related_id, rt.source_id
                 FROM related_text rt
                 WHERE rt.source_id = '{source_id}'
-                    AND rt.embedding IS NOT NULL
+                AND rt.embedding IS NOT NULL
                 ORDER BY rt.embedding <=> %s
                 LIMIT %s
                 ),
@@ -449,15 +450,15 @@ class RetrieverBySource(RelatedTextRetriever):
                 SELECT
                     t.related_id AS target_id,
                     string_agg(
-                    CASE WHEN r.related_id = t.related_id
-                        THEN '$$' || r.details || '$$'
-                        ELSE r.details
-                    END,
-                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                        CASE WHEN r.related_id = t.related_id
+                            THEN '$$' || r.details || '$$'
+                            ELSE r.details
+                        END,
+                        ' ' ORDER BY (split_part(r.related_id,'_',6))::int
                     ) AS merged_details
                 FROM related_text r
                 JOIN scored t
-                    ON split_part(r.related_id,'_',1) = t.p1
+                ON split_part(r.related_id,'_',1) = t.p1
                 AND split_part(r.related_id,'_',2) = t.p2
                 AND split_part(r.related_id,'_',3) = t.p3
                 AND split_part(r.related_id,'_',4) = t.p4
@@ -473,10 +474,12 @@ class RetrieverBySource(RelatedTextRetriever):
                 FROM scored t
                 JOIN siblings s ON s.target_id = t.related_id
                 LEFT JOIN related_text_source src ON src.source_id = t.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN relationship rel
+                ON rel.related_text_id_prefix = concat_ws('_', t.p1, t.p2, t.p3, t.p4, t.p5)
                 LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
                 ORDER BY t.rt_distance;
             """
+
         return self.retrieve_by_count(user_query, count, sql_query)
 
     def retrieve(self, user_query: str, source_ids: list[str], count: int) -> Result:
