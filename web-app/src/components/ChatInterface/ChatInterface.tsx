@@ -34,6 +34,29 @@ const ChatInterface = ({ selectedSourceId, sendMessageFunction }: ChatInterfaceP
         return text.replace(/\n/g, "<br />");
     };
 
+    const handleDownload = () => {
+    if (messages.length === 0) return;
+
+    const textContent = messages
+        .map(
+        (msg) =>
+            `${msg.sender === "user" ? "انت" : "المساعد"} [${new Date(
+            msg.timestamp
+            ).toLocaleString()}]:\n${msg.text}\n`
+        )
+        .join("\n--------------------\n\n");
+
+    const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conversation_${new Date().toISOString()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+
     const handleSendMessage = async () => {
         if (!inputMessage.trim()) return;
 
@@ -84,6 +107,16 @@ const ChatInterface = ({ selectedSourceId, sendMessageFunction }: ChatInterfaceP
 
     return (
         <div className="chat-interface">
+            <div className="chat-header">
+                <button
+                    onClick={handleDownload}
+                    disabled={messages.length === 0}
+                    className="download-btn"
+                >
+                    <img src="/assets/download.png" alt="تحميل" className="download-icon" />
+                </button>
+            </div>
+
             <div className="messages-display">
                 {messages.length === 0 ? (
                     <p className="no-messages">
