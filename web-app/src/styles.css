@@ -54,6 +54,10 @@ body {
     flex-direction: column;
 }
 
+.important {
+ background-color: yellow !important;
+}
+
 @media (max-width: 768px) {
     .App-main {
         flex-direction: column;
