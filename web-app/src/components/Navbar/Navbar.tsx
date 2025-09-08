@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import GuideModal from '../GuideModal/GuideModal';
 import "./navbar.css";
 
 const Navbar = () => {
@@ -11,9 +12,7 @@ const Navbar = () => {
                         الرئيسية
                     </button>
                 </Link>
-                    <button>
-                        طريقة الاستخدام
-                    </button>
+                    <GuideModal/>
                 <Link to="/contactus">
                     <button>
                         تواصل معنا

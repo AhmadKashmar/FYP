@@ -38,3 +38,10 @@ export interface Message {
 	text: string;
 	timestamp: string;
 }
+
+export interface Step {
+  title: string;
+  text: string;
+  image?: string;
+}
+

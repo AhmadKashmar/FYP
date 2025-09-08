@@ -30,6 +30,7 @@ class Transformer:
     @staticmethod
     def embeddings(texts: list[str]) -> np.ndarray:
         # The SentenceTransformer model handles tokenization and pooling internally
+        texts = [cleaner.cleanText(text) for text in texts]
         return Transformer.model.encode(texts)
 
 

@@ -1,0 +1,102 @@
+.guide-btn {
+  padding: 8px 16px;
+  background-color: #059669;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.guide-btn:hover {
+  background-color: #047857;
+}
+
+.guide-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+}
+
+.guide-modal {
+  color: #333;
+  background: #E7D6BD;
+  padding: 20px;
+  border-radius: 12px;
+  width: auto;
+  max-width: 500px;
+  max-height: 90vh;
+  text-align: right;
+  transform: scale(0.9) translateY(20px);
+  opacity: 0;
+  animation: popupIn 0.3s forwards;
+}
+
+.guide-modal h2 {
+  margin-bottom: 10px;
+  font-size: 20px;
+}
+.guide-modal p {
+  margin-bottom: 20px;
+  color: #333;
+}
+.guide-modal img {
+  border-radius: 8px;
+  margin-top: 10px;
+  
+  
+  width: 400px !important;
+  height: auto !important;
+  object-fit: fill;
+}
+
+.guide-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.guide-content {
+  transition: opacity 0.25s ease;
+  opacity: 1;
+}
+.guide-content.fade {
+  opacity: 0;
+}
+
+.progress-dots {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  background: #7e7d7d;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot.active {
+  background: #1a8161;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popupIn {
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
