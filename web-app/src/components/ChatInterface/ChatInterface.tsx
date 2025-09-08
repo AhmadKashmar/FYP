@@ -30,6 +30,10 @@ const ChatInterface = ({ selectedSourceId, sendMessageFunction }: ChatInterfaceP
         }
     }, [inputMessage]);
 
+    const formatText = (text: string) => {
+        return text.replace(/\n/g, "<br />");
+    };
+
     const handleSendMessage = async () => {
         if (!inputMessage.trim()) return;
 
@@ -96,7 +100,7 @@ const ChatInterface = ({ selectedSourceId, sendMessageFunction }: ChatInterfaceP
                             {msg.sender === "bot" ? (
                                 <div
                                     className="message-text"
-                                    dangerouslySetInnerHTML={{ __html: msg.text }}
+                                    dangerouslySetInnerHTML={{ __html: formatText(msg.text) }}
                                 />
                             ) : (
                                 <div className="message-text">{msg.text}</div>

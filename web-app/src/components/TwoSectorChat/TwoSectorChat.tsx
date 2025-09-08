@@ -35,7 +35,8 @@ const TwoSectorChat = ({ selectedSourceId }: TwoSectorChatProps) => {
 			<ChatInterface
 				selectedSourceId={selectedSourceId}
 				sendMessageFunction={sendMessageFn}
-			/></>
+			/>
+		</>
 	);
 };
 
