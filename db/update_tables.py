@@ -1,5 +1,4 @@
 import os
-import requests
 import psycopg2
 import psycopg2.extras
 from pgvector.psycopg2 import register_vector
@@ -7,7 +6,6 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import torch
 import numpy as np
-import warnings
 import traceback
 from random import randint
 from datetime import datetime
@@ -169,7 +167,6 @@ def main():
     )
     register_vector(conn)
     # show_progress(conn)
-    print("loading model ", model_name, "...")
     Transformer.load(model_name)
 
     try:

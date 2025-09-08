@@ -93,6 +93,8 @@ Your output should be purely Arabic.
 </user query>
 
 Some sample format for your output is as follows:
+<answer the user question in short without mentioning the sources or evidence first>
+
 يذكر في القرآن الكريم الايت التالية (الاية if only one):
 - <aya1, without any comments on it>
 - <aya2, without any comments on it>

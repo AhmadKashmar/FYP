@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from psycopg2.extensions import register_adapter, AsIs
 import logging
+from functools import lru_cache
 
 register_adapter(np.int64, lambda v: AsIs(int(v)))
 register_adapter(np.int32, lambda v: AsIs(int(v)))
@@ -96,11 +97,23 @@ def execute_query(
         raise
 
 
-def embed(text: str) -> list[float]:
-    logger.info("Embedding text")
-    text = cleaner.cleanText(text)
-    vec = transformer.encode(text, normalize_embeddings=True).tolist()
-    return Vector(vec)
+@lru_cache(maxsize=100_000)
+def _embed_cached(text: str) -> tuple:
+    logger.info("Embedding text (cached)")
+    cleaned = cleaner.cleanText(text)
+    vec = transformer.encode(cleaned, normalize_embeddings=True)
+    return tuple(vec.tolist())
+
+
+def embed(text: str) -> Vector:
+    return Vector(_embed_cached(text))
+
+
+def get_similarity(text: str, query: str) -> float:
+    text_vec = embed(text)
+    query_vec = embed(query)
+    similarity = sum(t * q for t, q in zip(text_vec.to_list(), query_vec.to_list()))
+    return similarity
 
 
 @dataclass(eq=True)
@@ -270,15 +283,15 @@ class RelatedTextRetriever:
                 SELECT
                     t.related_id AS target_id,
                     string_agg(
-                    CASE WHEN r.related_id = t.related_id
-                        THEN '$$' || r.details || '$$'
-                        ELSE r.details
-                    END,
-                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                        CASE WHEN r.related_id = t.related_id
+                            THEN '$$' || r.details || '$$'
+                            ELSE r.details
+                        END,
+                        ' ' ORDER BY (split_part(r.related_id,'_',6))::int
                     ) AS merged_details
                 FROM related_text r
                 JOIN scored t
-                    ON split_part(r.related_id,'_',1) = t.p1
+                ON split_part(r.related_id,'_',1) = t.p1
                 AND split_part(r.related_id,'_',2) = t.p2
                 AND split_part(r.related_id,'_',3) = t.p3
                 AND split_part(r.related_id,'_',4) = t.p4
@@ -294,7 +307,8 @@ class RelatedTextRetriever:
                 FROM scored t
                 JOIN siblings s ON s.target_id = t.related_id
                 LEFT JOIN related_text_source src ON src.source_id = t.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN relationship rel
+                ON rel.related_text_id_prefix = concat_ws('_', t.p1, t.p2, t.p3, t.p4, t.p5)
                 LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
                 ORDER BY t.rt_distance;
             """
@@ -379,8 +393,9 @@ class RetrieverBySource(RelatedTextRetriever):
         self.cursor = conn.cursor()
         self.source_ids, self.sources = self.get_source_ids()
         self.base = kwargs.get("base", 0.3)
-        self.sentence_threshold = kwargs.get("sentence_threshold", 0.7)
+        self.sentence_threshold = kwargs.get("sentence_threshold", 0.5)
         self.rt_threshold = kwargs.get("rt_threshold", 0.4)
+        self.balance_threshold = kwargs.get("balance_threshold", 0.9)
         self.source_by_id = {source.get("source_id"): source for source in self.sources}
 
     def get_source_ids(self) -> tuple[list[str], list[dict]]:
@@ -413,7 +428,7 @@ class RetrieverBySource(RelatedTextRetriever):
                 SELECT rt.related_id, rt.source_id
                 FROM related_text rt
                 WHERE rt.source_id = '{source_id}'
-                    AND rt.embedding IS NOT NULL
+                AND rt.embedding IS NOT NULL
                 ORDER BY rt.embedding <=> %s
                 LIMIT %s
                 ),
@@ -435,15 +450,15 @@ class RetrieverBySource(RelatedTextRetriever):
                 SELECT
                     t.related_id AS target_id,
                     string_agg(
-                    CASE WHEN r.related_id = t.related_id
-                        THEN '$$' || r.details || '$$'
-                        ELSE r.details
-                    END,
-                    ' ' ORDER BY (split_part(r.related_id,'_',6))::int
+                        CASE WHEN r.related_id = t.related_id
+                            THEN '$$' || r.details || '$$'
+                            ELSE r.details
+                        END,
+                        ' ' ORDER BY (split_part(r.related_id,'_',6))::int
                     ) AS merged_details
                 FROM related_text r
                 JOIN scored t
-                    ON split_part(r.related_id,'_',1) = t.p1
+                ON split_part(r.related_id,'_',1) = t.p1
                 AND split_part(r.related_id,'_',2) = t.p2
                 AND split_part(r.related_id,'_',3) = t.p3
                 AND split_part(r.related_id,'_',4) = t.p4
@@ -459,10 +474,12 @@ class RetrieverBySource(RelatedTextRetriever):
                 FROM scored t
                 JOIN siblings s ON s.target_id = t.related_id
                 LEFT JOIN related_text_source src ON src.source_id = t.source_id
-                LEFT JOIN relationship rel ON rel.related_text_id = t.related_id
+                LEFT JOIN relationship rel
+                ON rel.related_text_id_prefix = concat_ws('_', t.p1, t.p2, t.p3, t.p4, t.p5)
                 LEFT JOIN sentence snt ON (snt.sentence_id, snt.section_id) = (rel.sentence_id, rel.section_id)
                 ORDER BY t.rt_distance;
             """
+
         return self.retrieve_by_count(user_query, count, sql_query)
 
     def retrieve(self, user_query: str, source_ids: list[str], count: int) -> Result:
@@ -488,7 +505,7 @@ class RetrieverBySource(RelatedTextRetriever):
                 sentence.score = [self.score_sentence(sentence)]
             results.extend(result)
         # merge each sentence so that all its related texts are grouped
-        results = self.merge_sentences(results)
+        results = self.merge_sentences(results, user_query)
         results = self.filter_results(results)
         return self.finalize(results)
 
@@ -588,7 +605,9 @@ class RetrieverBySource(RelatedTextRetriever):
         return sum(val * (self.base**i) for i, val in enumerate(sorted(vals)))
 
     def merge_sentences(
-        self, sentence_related_texts: list[SentenceRelatedTexts]
+        self,
+        sentence_related_texts: list[SentenceRelatedTexts],
+        user_query: str,
     ) -> list[SentenceRelatedTexts]:
         """
         Merges the sentences' related texts from all the different sources
@@ -607,6 +626,9 @@ class RetrieverBySource(RelatedTextRetriever):
         sentences = sorted(merged.values(), key=lambda x: max(x.score), reverse=True)
         for sentence in sentences:
             sentence.final_score = self.get_score(sentence.score)
+            sentence.final_score = self.balance_threshold * sentence.final_score + (
+                1 - self.balance_threshold
+            ) * get_similarity(sentence.sentence.text, user_query)
         # now each sentence has its final score
         return sentences
 

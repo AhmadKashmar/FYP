@@ -23,8 +23,8 @@ ON related_text (
 INCLUDE (related_id, details)
 WHERE related_id ~ '^[0-9]+(_[0-9]+){5}$';
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS relationship_rtid_sid_secid_idx
-ON relationship (related_text_id, sentence_id, section_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS relationship_prefix_sid_secid_idx
+ON relationship (related_text_id_prefix, sentence_id, section_id);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS sentence_sid_secid_btree
 ON sentence (sentence_id, section_id);
