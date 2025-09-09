@@ -1,13 +1,13 @@
 /* TODO: separate per component */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap");
 
 * {
-	font-family: 'Cairo', sans-serif;
+	font-family: "Cairo", sans-serif;
 }
 
 body {
 	margin: 0;
-	background: #E7D6BD;
+	background: #e7d6bd;
 	font-family: "Inter", sans-serif;
 	color: #333;
 	direction: rtl;
@@ -15,33 +15,32 @@ body {
 }
 
 .App-main {
-    display: flex;
-    height: 100vh;
+	display: flex;
+	height: 100vh;
 }
 
 .header-container {
-  display: flex;
-  align-items: center;
-  margin-bottom: 15px;
+	display: flex;
+	align-items: center;
+	margin-bottom: 15px;
 }
 
 .header-pattern {
-    height: 50px;
+	height: 50px;
 	flex: 1;
-    background-image: url("../public/assets/pattern.png");
-    background-repeat: repeat;
+	background-image: url("../public/assets/pattern.png");
+	background-repeat: repeat;
 	background-size: 50px;
 	margin-right: 12px;
 }
 
-
 .sidebar {
-    width: 18%;
-    min-width: 200px;
-    border-right: 1px solid #ccc;
-    transition: all 0.3s ease-in-out;
+	width: 18%;
+	min-width: 200px;
+	border-right: 1px solid #ccc;
+	transition: all 0.3s ease-in-out;
 	background-color: #2d5b59;
-	color: #E7D6BD;
+	color: #e7d6bd;
 	padding: 10px;
 	margin-left: 10px;
 	border-radius: 10px;
@@ -49,33 +48,33 @@ body {
 }
 
 .chat-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
 }
 
 .important {
- background-color: yellow !important;
+	background-color: #2d5b59;
+	color: white !important;
 }
 
 @media (max-width: 768px) {
-    .App-main {
-        flex-direction: column;
-    }
+	.App-main {
+		flex-direction: column;
+	}
 
-    .sidebar {
-		width: 100%; 
+	.sidebar {
+		width: 100%;
 		min-width: unset;
-        height: auto;
-        padding-bottom: 0;
-        border-right: none;
-        border-bottom: 1px solid #ccc;
+		height: auto;
+		padding-bottom: 0;
+		border-right: none;
+		border-bottom: 1px solid #ccc;
 		padding-bottom: 10px;
 		margin-left: 0;
-    }
+	}
 
 	.chat-section {
 		height: 100%;
 	}
-
 }
